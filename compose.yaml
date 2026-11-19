@@ -1,0 +1,18 @@
+services:
+  scopebrief:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      SCOPEBRIEF_DEMO: "${SCOPEBRIEF_DEMO:-1}"
+      SCOPEBRIEF_SECURE_COOKIE: "${SCOPEBRIEF_SECURE_COOKIE:-0}"
+      SCOPEBRIEF_MEMBER_KEY: "${SCOPEBRIEF_MEMBER_KEY:-}"
+      SCOPEBRIEF_REVIEWER_KEY: "${SCOPEBRIEF_REVIEWER_KEY:-}"
+      SCOPEBRIEF_MODEL_BASE_URL: "${SCOPEBRIEF_MODEL_BASE_URL:-}"
+      SCOPEBRIEF_MODEL_NAME: "${SCOPEBRIEF_MODEL_NAME:-}"
+      SCOPEBRIEF_MODEL_KEY: "${SCOPEBRIEF_MODEL_KEY:-}"
+      SCOPEBRIEF_MODEL_TIMEOUT: "${SCOPEBRIEF_MODEL_TIMEOUT:-15}"
+    volumes:
+      - scopebrief_data:/app/data
+volumes:
+  scopebrief_data:

@@ -1,0 +1,1 @@
+"""ScopeBrief knowledge agent."""

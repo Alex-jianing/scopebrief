@@ -1,0 +1,32 @@
+{
+  "projects": [
+    {"id":"beichen","name":"北辰","description":"收银台与支付链路","color":"violet","aliases":["北辰","Beichen","收银台"],"reviewer_only":false},
+    {"id":"tide","name":"潮汐","description":"消息中心与投递链路","color":"teal","aliases":["潮汐","Tide","消息中心"],"reviewer_only":false},
+    {"id":"bridge","name":"铸桥","description":"账务迁移与对账","color":"amber","aliases":["铸桥","Bridge","账务迁移"],"reviewer_only":true}
+  ],
+  "documents": [
+    {"project_id":"beichen","key":"release","versions":[
+      {"title":"北辰 · 灰度上线评审","date":"2026-11-16T09:00:00+08:00","body":"# 北辰 · 灰度上线评审\n\n## 上线结论 [decision=hold]\n北辰暂缓上线。支付回调重放将在下一次评审前补测，今晚不能上线。\n\n## 当前阻塞 [blocker]\n支付回调重放未通过，支付组负责补测。\n\n## 灰度窗口 [window]\n原计划周三 20:00 开始 5% 灰度。"},
+      {"title":"北辰 · 灰度上线评审","date":"2026-11-18T14:00:00+08:00","body":"# 北辰 · 灰度上线评审\n\n## 放行结论 [decision=go]\n支付回调重放已验收通过。北辰可进入 10% 灰度，观察 30 分钟后再决定是否放量。\n\n## 变更时段 [window]\n周四 21:00（北京时间）开启 10% 灰度，22:00 前完成复盘。\n\n## 未完成项 [blocker]\n当前无上线阻塞。支付移动端文案属于后续优化，不阻塞本次灰度。"}
+    ]},
+    {"project_id":"beichen","key":"rollback","versions":[
+      {"title":"北辰 · 回滚手册","date":"2026-11-17T15:30:00+08:00","body":"# 北辰 · 回滚手册\n\n## 回滚阈值与操作 [rollback]\n支付失败率连续 5 分钟超过 0.8% 时，关闭 checkout_v2 开关并回切旧版支付路由。\n\n## 当班负责人 [owner]\n支付值班负责人为林遥。由林遥确认回切完成并同步发版群。\n\n## 验收步骤 [verification]\n回切后使用沙箱订单验证下单、支付和支付回调，并核对监控曲线。"}
+    ]},
+    {"project_id":"beichen","key":"design","versions":[
+      {"title":"北辰 · 结算技术方案","date":"2026-11-12T10:00:00+08:00","body":"# 北辰 · 结算技术方案\n\n## 幂等设计\ncheckout_request_id 绑定同一订单，回调记录按 provider_event_id 去重。重复请求返回原订单状态。\n\n## 核心依赖 [dependency]\n收银台调用支付网关与风控服务。支付回调以网关事件为准，风控超时走人工核验。"}
+    ]},
+    {"project_id":"tide","key":"release","versions":[
+      {"title":"潮汐 · 灰度上线评审","date":"2026-11-15T17:00:00+08:00","body":"# 潮汐 · 灰度上线评审\n\n## 上线结论 [decision=go]\n潮汐可以上线。消息中心计划今晚进行灰度上线，准入条件已满足。\n\n## 上线窗口 [window]\n原计划周四 20:30（北京时间）开启 20% 灰度。\n\n## 当前阻塞 [blocker]\n消息中心暂无上线阻塞，回归用例已经通过。"},
+      {"title":"潮汐 · 灰度上线评审","date":"2026-11-18T17:10:00+08:00","body":"# 潮汐 · 灰度上线评审\n\n## 放行结论 [decision=hold]\n潮汐暂缓上线。投递队列异常时的告警接收链路未通过验收。\n\n## 待解除风险 [blocker]\n通知值班组尚未收到投递队列积压告警。完成告警配置与夜间演练后，重新提交评审。\n\n## 变更时段 [window]\n原灰度窗口已取消。下一次变更时段待复审确定。"}
+    ]},
+    {"project_id":"tide","key":"incident","versions":[
+      {"title":"潮汐 · 投递演练记录","date":"2026-11-18T12:00:00+08:00","body":"# 潮汐 · 投递演练记录\n\n## 积压回退方案 [rollback]\n投递延迟 P95 连续 10 分钟超过 45 秒，暂停新消费者并恢复旧消费组。保留积压消息并核对重复投递率。\n\n## 值班负责人 [owner]\n消息服务负责人为许节。告警规则由许节维护，通知值班组验证接收情况。\n\n## 演练验收 [verification]\n向测试队列投递 100 条事件，保证无丢失且值班终端收到积压告警。"}
+    ]},
+    {"project_id":"tide","key":"design","versions":[
+      {"title":"潮汐 · 事件投递设计","date":"2026-11-10T11:00:00+08:00","body":"# 潮汐 · 事件投递设计\n\n## 消息重试机制\n消息投递使用退避重试，退避间隔为 10 秒、30 秒、120 秒。第三次仍失败时进入死信队列。\n\n## 投递依赖 [dependency]\n消息中心依赖事件总线、通知网关和告警平台。事件总线提供按用户 ID 分区的顺序保证。"}
+    ]},
+    {"project_id":"bridge","key":"release","versions":[
+      {"title":"铸桥 · 迁移准入评审","date":"2026-11-18T16:30:00+08:00","body":"# 铸桥 · 迁移准入评审\n\n## 放行结论 [decision=hold]\n铸桥暂缓迁移。对账差异尚待复核，复核完成后由评审负责人安排第二轮评审。\n\n## 人工验收 [verification]\n迁移验收代号为 ORBIT-734，仅用于合成案例核验。核验连续两个结算日的账务汇总。\n\n## 迁移负责人 [owner]\n迁移评审负责人为韩渊。"}
+    ]}
+  ]
+}

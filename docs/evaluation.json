@@ -1,0 +1,987 @@
+{
+  "dataset": "release-reviews-v1",
+  "mode": "extractive",
+  "metrics": {
+    "baseline": {
+      "passed": 14,
+      "total": 28,
+      "gold_hits": 11,
+      "gold_total": 32,
+      "correct_decisions": 0,
+      "decision_total": 5,
+      "stale_citations": 9,
+      "leak_cases": 0,
+      "correct_abstentions": 6,
+      "abstention_total": 6,
+      "p95_ms": 7,
+      "model_cases": 0,
+      "fallback_cases": 0
+    },
+    "harness": {
+      "passed": 28,
+      "total": 28,
+      "gold_hits": 32,
+      "gold_total": 32,
+      "correct_decisions": 5,
+      "decision_total": 5,
+      "stale_citations": 0,
+      "leak_cases": 0,
+      "correct_abstentions": 6,
+      "abstention_total": 6,
+      "p95_ms": 7,
+      "model_cases": 0,
+      "fallback_cases": 0
+    }
+  },
+  "cases": [
+    {
+      "id": "r01",
+      "group": "版本时效",
+      "title": "北辰当前放行",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "1 个项目结论与预期不一致",
+          "缺少 1 条目标证据",
+          "引用 1 条历史版本"
+        ],
+        "gold_hits": 0,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 1,
+        "stale": 1,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 8,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 1,
+        "decision_total": 1,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "r02",
+      "group": "版本时效",
+      "title": "潮汐当前放行",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "1 个项目结论与预期不一致",
+          "缺少 1 条目标证据",
+          "引用 1 条历史版本"
+        ],
+        "gold_hits": 0,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 1,
+        "stale": 1,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 1,
+        "decision_total": 1,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "r03",
+      "group": "版本时效",
+      "title": "北辰变更时段",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "缺少 1 条目标证据",
+          "引用 1 条历史版本"
+        ],
+        "gold_hits": 0,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 1,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "r04",
+      "group": "版本时效",
+      "title": "潮汐原窗口已取消",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "缺少 1 条目标证据",
+          "引用 1 条历史版本"
+        ],
+        "gold_hits": 0,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 1,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "r05",
+      "group": "版本时效",
+      "title": "支付旧阻塞已解除",
+      "abstain": false,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "r06",
+      "group": "版本时效",
+      "title": "投递新阻塞",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "缺少 1 条目标证据",
+          "引用 1 条历史版本"
+        ],
+        "gold_hits": 0,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 1,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "c01",
+      "group": "跨项目",
+      "title": "两项目各自能否放行",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "2 个项目结论与预期不一致",
+          "缺少 4 条目标证据",
+          "回答状态与预期不一致",
+          "引用 3 条历史版本"
+        ],
+        "gold_hits": 0,
+        "gold_total": 4,
+        "correct_decisions": 0,
+        "decision_total": 2,
+        "stale": 3,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 4,
+        "gold_total": 4,
+        "correct_decisions": 2,
+        "decision_total": 2,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 7,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "c02",
+      "group": "跨项目",
+      "title": "两项目分别查回退与值班",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "1 个项目结论与预期不一致",
+          "缺少 3 条目标证据",
+          "回答状态与预期不一致"
+        ],
+        "gold_hits": 1,
+        "gold_total": 4,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 4,
+        "gold_total": 4,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "c03",
+      "group": "跨项目",
+      "title": "并行回退预案",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "1 个项目结论与预期不一致",
+          "缺少 1 条目标证据",
+          "回答状态与预期不一致"
+        ],
+        "gold_hits": 1,
+        "gold_total": 2,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 7,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 2,
+        "gold_total": 2,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 7,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "c04",
+      "group": "跨项目",
+      "title": "对比变更时段",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "2 个项目结论与预期不一致",
+          "缺少 2 条目标证据",
+          "回答状态与预期不一致"
+        ],
+        "gold_hits": 0,
+        "gold_total": 2,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 2,
+        "gold_total": 2,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "c05",
+      "group": "跨项目",
+      "title": "收银台和投递的依赖",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "2 个项目结论与预期不一致",
+          "缺少 2 条目标证据",
+          "回答状态与预期不一致"
+        ],
+        "gold_hits": 0,
+        "gold_total": 2,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 2,
+        "gold_total": 2,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "c06",
+      "group": "跨项目",
+      "title": "空缺项目与完整项目",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "缺少 1 条目标证据",
+          "引用 1 条历史版本"
+        ],
+        "gold_hits": 1,
+        "gold_total": 2,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 1,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 2,
+        "gold_total": 2,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "c07",
+      "group": "跨项目",
+      "title": "提及项目超出选择",
+      "abstain": false,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "q01",
+      "group": "单项问答",
+      "title": "支付回退条件",
+      "abstain": false,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "q02",
+      "group": "单项问答",
+      "title": "投递负责人",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "1 个项目结论与预期不一致",
+          "缺少 1 条目标证据",
+          "回答状态与预期不一致"
+        ],
+        "gold_hits": 0,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "q03",
+      "group": "单项问答",
+      "title": "支付值班人",
+      "abstain": false,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "q04",
+      "group": "单项问答",
+      "title": "消息演练",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "1 个项目结论与预期不一致",
+          "缺少 1 条目标证据",
+          "回答状态与预期不一致"
+        ],
+        "gold_hits": 0,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 7,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "q05",
+      "group": "单项问答",
+      "title": "支付幂等通用检索",
+      "abstain": false,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "q06",
+      "group": "单项问答",
+      "title": "死信队列通用检索",
+      "abstain": false,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "q07",
+      "group": "单项问答",
+      "title": "潮汐准入换一种问法",
+      "abstain": false,
+      "baseline": {
+        "pass": false,
+        "failures": [
+          "1 个项目结论与预期不一致",
+          "缺少 1 条目标证据",
+          "回答状态与预期不一致"
+        ],
+        "gold_hits": 0,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 1,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 1,
+        "decision_total": 1,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "a01",
+      "group": "边界与权限",
+      "title": "未知预算",
+      "abstain": true,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 0,
+        "gold_total": 0,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 0,
+        "gold_total": 0,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "a02",
+      "group": "边界与权限",
+      "title": "未接入的知识主题",
+      "abstain": true,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 0,
+        "gold_total": 0,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 0,
+        "gold_total": 0,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "a03",
+      "group": "边界与权限",
+      "title": "所选项目与问题不符",
+      "abstain": true,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 0,
+        "gold_total": 0,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 5,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 0,
+        "gold_total": 0,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 4,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "a04",
+      "group": "边界与权限",
+      "title": "普通成员查受限资料",
+      "abstain": true,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 0,
+        "gold_total": 0,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 4,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 0,
+        "gold_total": 0,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 4,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "a05",
+      "group": "边界与权限",
+      "title": "评审者查授权资料",
+      "abstain": false,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "a06",
+      "group": "边界与权限",
+      "title": "授权项目缺少历史",
+      "abstain": true,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 0,
+        "gold_total": 0,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 0,
+        "gold_total": 0,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "a07",
+      "group": "边界与权限",
+      "title": "普通成员直指受限范围",
+      "abstain": true,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 0,
+        "gold_total": 0,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 4,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 0,
+        "gold_total": 0,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": true,
+        "duration_ms": 4,
+        "generator": "extractive"
+      }
+    },
+    {
+      "id": "a08",
+      "group": "边界与权限",
+      "title": "混合授权范围",
+      "abstain": false,
+      "baseline": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      },
+      "harness": {
+        "pass": true,
+        "failures": [],
+        "gold_hits": 1,
+        "gold_total": 1,
+        "correct_decisions": 0,
+        "decision_total": 0,
+        "stale": 0,
+        "leak": false,
+        "abstained": false,
+        "duration_ms": 6,
+        "generator": "extractive"
+      }
+    }
+  ]
+}

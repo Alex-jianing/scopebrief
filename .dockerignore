@@ -1,0 +1,13 @@
+*
+!pyproject.toml
+!uv.lock
+!scopebrief/
+!scopebrief/**
+scopebrief/**/__pycache__/
+!frontend/
+!frontend/package*.json
+!frontend/index.html
+!frontend/tsconfig.json
+!frontend/vite.config.ts
+!frontend/src/
+!frontend/src/**
