@@ -1,11 +1,12 @@
 import { useState } from 'react'
+import type { Ref } from 'react'
 import {
-  Activity, ArrowRight, ArrowUpRight, BookOpenCheck, CircleAlert, ClipboardCheck,
+  Activity, ArrowDown, ArrowRight, ArrowUpRight, BookOpenCheck, CircleAlert, ClipboardCheck,
   Code2, FileSearch, GitBranch, Layers3, LoaderCircle, ScanSearch, ThumbsUp, Flag, Square,
 } from 'lucide-react'
 import { api, errorText, isActive, labels } from './api'
-import type { Citation, FindingStatus, Project, Run } from './api'
-import { Blank, ProjectIcon, WorkflowIllustration } from './ui'
+import type { Citation, FindingStatus, Project, Run, RunSummary } from './api'
+import { Blank, ProjectIcon } from './ui'
 
 const presets = [
   { label: '跨项目放行', question: '今晚北辰和潮汐各自能否上线？哪个还有阻塞？', icon: GitBranch },
@@ -28,7 +29,10 @@ const stages: Record<string, string> = {
 
 type WorkbenchProps = {
   run: Run | null
+  opening: RunSummary | null
   busy: boolean
+  starting: boolean
+  questionInput: Ref<HTMLTextAreaElement>
   draft: string
   setDraft: (value: string) => void
   scope: string[]
@@ -41,33 +45,47 @@ type WorkbenchProps = {
 }
 
 export function Workbench({
-  run, busy, draft, setDraft, scope, projects, ask, showCitation, team, stop, setup,
+  run, opening, busy, starting, questionInput, draft, setDraft, scope, projects, ask, showCitation, team, stop, setup,
 }: WorkbenchProps) {
+  const selection = run ?? opening
   const result = run?.result
   const selected = projects.filter(project => scope.includes(project.id))
   const canAsk = !busy && selected.length > 0
+
+  function jumpToEvidence() {
+    const panel = document.getElementById('evidence-panel')
+    panel?.focus({ preventScroll: true })
+    panel?.scrollIntoView({
+      block: 'start',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+    })
+  }
+
   return <div className="view-content">
-    {!run ? <section className="hero">
+    {!selection ? <section className="hero">
       <div className="hero-copy">
         <span className="hero-label"><ScanSearch size={15} /> 知识问答</span>
         <h1>{team ? '项目知识问答' : '跨项目上线评审'}</h1>
-        <p>{team ? '按项目查团队资料、规范和决策记录。点击引用核对原文。'
+        <p>{team ? <>按项目查团队资料、规范和决策记录。<br className="hero-break" />点击引用核对原文。</>
           : <>查放行、阻塞和回滚。每条结论都可以<br className="hero-break" />追到文档版本与原文。</>}</p>
       </div>
-      <WorkflowIllustration />
-    </section> : <section className="run-heading">
+    </section> : <section className="run-heading" key={selection.id}>
       <div className="run-label"><BookOpenCheck size={16} /> 评审结果</div>
-      <h1>{run.question}</h1>
+      <h1>{selection.question}</h1>
       <div className="run-meta">
-        {isActive(run.status) && <span className="chip violet"><LoaderCircle className="spin" size={14} />
+        {opening && <span className="chip accent" role="status"><LoaderCircle className="spin" size={14} /> 加载回答</span>}
+        {run && isActive(run.status) && <span className="chip accent"><LoaderCircle className="spin" size={14} />
           {run.status === 'queued' ? '正在排队' : '正在查证'}</span>}
-        {run.status === 'cancelled' && <span className="chip neutral">已取消</span>}
+        {run?.status === 'cancelled' && <span className="chip neutral">已取消</span>}
         {result && <>
           <span className={'chip ' + (result.status === 'answered' ? 'teal' : 'amber')}>
             {result.status === 'answered' ? '证据齐全' : result.status === 'partial' ? '有未覆盖项' : '无法确认'}
           </span>
           <span>{result.generator === 'model' ? '模型摘录' : result.generator === 'fallback' ? '模型降级 · 原文摘录' : '原文摘录'}</span>
           <span>{result.duration_ms.toLocaleString()} ms</span>
+          <button className="button mobile-evidence-link" type="button" onClick={jumpToEvidence}>
+            查看证据 <ArrowDown size={13} />
+          </button>
         </>}
       </div>
     </section>}
@@ -81,7 +99,7 @@ export function Workbench({
       <span>{run.events.at(-1)?.detail ?? (run.status === 'queued' ? '等待可用的问答执行位…' : '正在建立检索范围…')}</span>
       <button type="button" className="button" onClick={stop}><Square size={13} /> 停止</button>
     </div>}
-    {result && <div className="answer-area" aria-live="polite">
+    {result && <div className="answer-area" aria-live="polite" key={run?.id}>
       {result.scope_limited && result.citations.length > 0 && <div className="surface abstention">
         <CircleAlert size={20} /> 部分提及项目超出此会话的权限或检索范围。
       </div>}
@@ -119,11 +137,11 @@ export function Workbench({
       {setup && <button className="button primary" onClick={setup}>打开团队管理 <ArrowRight size={15} /></button>}
     </div>}
     <form className="surface composer" onSubmit={event => { event.preventDefault(); if (canAsk) ask(draft) }}>
-      <label htmlFor="question">{run ? '继续查证' : team ? '查询团队知识' : '问一个上线问题'}</label>
-      <textarea id="question" placeholder={team ? '例如 发布验收需要哪些资料？' : '例如 北辰今晚能上线吗？'} rows={2} value={draft}
+      <label htmlFor="question">{selection ? '继续查证' : team ? '查询团队知识' : '问一个上线问题'}</label>
+      <textarea id="question" ref={questionInput} placeholder={team ? '例如 发布验收需要哪些资料？' : '例如 北辰今晚能上线吗？'} rows={2} value={draft}
         maxLength={600} onChange={event => setDraft(event.target.value)}
         onKeyDown={event => {
-          if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && canAsk) {
+          if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.nativeEvent.isComposing && canAsk) {
             event.preventDefault()
             ask(draft)
           }
@@ -132,9 +150,12 @@ export function Workbench({
         <span className="composer-scope"><Layers3 size={15} />
           {selected.length ? selected.map(project => project.name).join('、') : '请选择项目范围'}
         </span>
-        <button className="button primary" disabled={!canAsk || draft.trim().length < 2} type="submit">
-          查证 <ArrowRight size={17} />
-        </button>
+        <div className="composer-submit">
+          <span className="shortcut" aria-hidden="true" title="Ctrl 或 ⌘ 加回车提交"><kbd>Ctrl</kbd><kbd>↵</kbd></span>
+          <button className="button primary" disabled={!canAsk || draft.trim().length < 2} type="submit">
+            {starting ? <>提交中 <LoaderCircle className="spin" size={17} /></> : <>查证 <ArrowRight size={17} /></>}
+          </button>
+        </div>
       </div>
     </form>
     {!team && <section className="presets" aria-label="示例问题">
@@ -189,7 +210,7 @@ export function EvidencePanel({ run, showCitation }: {
   const [choice, setChoice] = useState<'sources' | 'trace' | null>(null)
   const tab = choice ?? (isActive(run?.status) ? 'trace' : 'sources')
   const sources = run?.result?.citations ?? []
-  return <aside className="evidence-panel" aria-label="证据与轨迹">
+  return <aside className="surface evidence-panel" id="evidence-panel" aria-label="证据与轨迹" tabIndex={-1}>
     <div className="evidence-heading"><span className="evidence-mark"><BookOpenCheck size={17} /></span>
       <h2>证据面板</h2></div>
     <div className="panel-tabs" aria-label="面板内容">
@@ -198,30 +219,32 @@ export function EvidencePanel({ run, showCitation }: {
       <button className={tab === 'trace' ? 'active' : ''} aria-pressed={tab === 'trace'}
         onClick={() => setChoice('trace')}>运行轨迹</button>
     </div>
-    {tab === 'sources' ? (
-      sources.length ? <div className="source-list">
-        {sources.map(item => <button className="source-card" key={item.id} onClick={() => showCitation(item)}>
-          <span className="source-number">{item.number}</span>
-          <span><strong>{item.title}</strong><small>{item.heading}</small>
-            <small className="code-label">v{item.revision} · 第 {item.start_line}
-              {item.end_line !== item.start_line ? '–' + item.end_line : ''} 行</small></span>
-          <ArrowUpRight size={14} />
-        </button>)}
-      </div> : <Blank icon={<FileSearch size={24} />} title={run?.result ? '没有引用' : '引用将在这里出现'}
-        detail="打开一条引用，可以查看当时使用的文档版本和原文行号。" />
-    ) : run?.events.length ? (
-      <div className="trace-content">
-        <ol className="trace-list">
-          {run.events.map(event => <li key={event.id}>
-            <i className={event.stage === 'fallback' || event.stage === 'budget' ? 'amber-dot' : ''} />
-            <div><div className="trace-step"><strong>{stages[event.stage] ?? event.stage}</strong><small>+{event.elapsed_ms} ms</small></div>
-              <p>{event.detail}</p></div>
-          </li>)}
-        </ol>
-        {run.result?.usage && <div className="trace-usage">
-          <Code2 size={15} /> {run.result.usage.total_tokens ?? '—'} tokens · {run.result.model}
-        </div>}
-      </div>
-    ) : <Blank icon={<Activity size={24} />} title="等待运行" detail="这里会记录范围校验、检索、补查和验证步骤。" />}
+    <div className="panel-body" key={tab}>
+      {tab === 'sources' ? (
+        sources.length ? <div className="source-list">
+          {sources.map(item => <button className="source-card" key={item.id} onClick={() => showCitation(item)}>
+            <span className="source-number">{item.number}</span>
+            <span><strong>{item.title}</strong><small>{item.heading}</small>
+              <small className="code-label">v{item.revision} · 第 {item.start_line}
+                {item.end_line !== item.start_line ? '–' + item.end_line : ''} 行</small></span>
+            <ArrowUpRight size={14} />
+          </button>)}
+        </div> : <Blank icon={<FileSearch size={24} />} title={run?.result ? '没有引用' : '引用将在这里出现'}
+          detail="打开一条引用，可以查看当时使用的文档版本和原文行号。" />
+      ) : run?.events.length ? (
+        <div className="trace-content">
+          <ol className="trace-list">
+            {run.events.map(event => <li key={event.id}>
+              <i className={event.stage === 'fallback' || event.stage === 'budget' ? 'amber-dot' : ''} />
+              <div><div className="trace-step"><strong>{stages[event.stage] ?? event.stage}</strong><small>+{event.elapsed_ms} ms</small></div>
+                <p>{event.detail}</p></div>
+            </li>)}
+          </ol>
+          {run.result?.usage && <div className="trace-usage">
+            <Code2 size={15} /> {run.result.usage.total_tokens ?? '—'} tokens · {run.result.model}
+          </div>}
+        </div>
+      ) : <Blank icon={<Activity size={24} />} title="等待运行" detail="这里会记录范围校验、检索、补查和验证步骤。" />}
+    </div>
   </aside>
 }

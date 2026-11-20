@@ -28,7 +28,7 @@ export function DocumentDialog({ target, close }: { target: DocumentTarget; clos
     {!error && !doc && <div className="dialog-loading"><LoaderCircle className="spin" size={19} /> 加载资料…</div>}
     {doc && <>
       <div className="document-title">
-        <span className="chip violet">v{doc.revision}</span>
+        <span className="chip accent">v{doc.revision}</span>
         <span className={'chip ' + (doc.current ? 'teal' : 'neutral')}>{doc.current ? '当前版本' : '历史版本'}</span>
         {doc.archived_at && <span className="chip amber">已归档</span>}
         <h3>{doc.title}</h3>

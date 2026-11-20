@@ -30,7 +30,7 @@ test('real team imports a document and turns a member report into a passing regr
   await project.getByLabel('描述').fill('统一设备售后服务口径')
   await project.getByRole('button', { name: '保存项目' }).click()
   await expect(page.getByRole('heading', { name: '门店支持', exact: true })).toBeVisible()
-  await page.screenshot({ path: info.outputPath('team-admin.png') })
+  await page.screenshot({ path: info.outputPath('team-admin.png'), animations: 'disabled' })
 
   await page.getByRole('button', { name: '项目资料', exact: true }).click()
   await page.getByRole('button', { name: '发布资料' }).click()
@@ -88,7 +88,7 @@ test('real team imports a document and turns a member report into a passing regr
   await page.getByRole('button', { name: '运行团队评测' }).click()
   await expect(page.getByRole('heading', { name: '通过 1 / 1' })).toBeVisible()
   await expect(page.getByText('store-support--warranty@1', { exact: true })).toBeVisible()
-  await page.screenshot({ path: info.outputPath('team-regression.png') })
+  await page.screenshot({ path: info.outputPath('team-regression.png'), animations: 'disabled' })
 
   await page.getByRole('button', { name: '项目资料', exact: true }).click()
   await page.getByRole('button', { name: '批量导入', exact: true }).click()

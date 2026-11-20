@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   BookOpen, ChartNoAxesCombined, Check, ChevronDown, ChevronRight,
-  CircleHelp, Clock3, MessageSquareText, PanelsTopLeft,
+  CircleHelp, Clock3, MessageSquareText, PanelsTopLeft, Plus,
   Shield, UsersRound, Waypoints,
 } from 'lucide-react'
-import { api, errorText, isActive } from './api'
+import { api, errorText, formatDate, isActive } from './api'
 import type { Citation, Role, Run, RunSummary, Session } from './api'
 import { Benchmark } from './Benchmark'
 import { DocumentDialog, Library } from './Library'
@@ -36,6 +36,7 @@ export function App() {
   const [starting, setStarting] = useState(false)
   const [draft, setDraft] = useState('')
   const [document, setDocument] = useState<DocumentTarget | null>(null)
+  const questionInput = useRef<HTMLTextAreaElement>(null)
 
   function receiveSession(value: Session) {
     setSession(value)
@@ -103,6 +104,27 @@ export function App() {
 
   const current = run?.id === runId ? run : null
   const busy = starting || isActive(current?.status) || Boolean(runId && !current)
+  const opening = runId && !current ? history.find(item => item.id === runId) ?? null : null
+
+  function navigate(next: Page, nextRunId?: string) {
+    setPage(next)
+    setError('')
+    if (nextRunId !== undefined) setRunId(nextRunId)
+    if (next !== page || (nextRunId !== undefined && nextRunId !== runId)) {
+      window.scrollTo({ top: 0, behavior: 'instant' })
+    }
+  }
+
+  function startQuestion() {
+    setPage('ask')
+    setError('')
+    if (runId) {
+      setRunId(null)
+      setRun(null)
+      setDraft('')
+    }
+    requestAnimationFrame(() => questionInput.current?.focus())
+  }
 
   async function ask(question: string) {
     const text = question.trim()
@@ -198,7 +220,7 @@ export function App() {
   return (
     <div className={'app-shell view-' + page}>
       <aside className="sidebar" aria-label="工作区">
-        <button className="brand" onClick={() => setPage('ask')}>
+        <button className="brand" onClick={() => navigate('ask')}>
           <span className="brand-mark"><Waypoints size={21} strokeWidth={2.3} /></span>
           <span><strong>ScopeBrief</strong><small>项目证据台</small></span>
         </button>
@@ -207,7 +229,7 @@ export function App() {
           {visiblePages.map(item =>
             <button key={item.id} aria-current={page === item.id ? 'page' : undefined}
               className={'nav-link ' + (page === item.id ? 'active' : '')}
-              onClick={() => { setPage(item.id); setError('') }}>
+              onClick={() => navigate(item.id)}>
               <item.icon size={17} /> <span>{navigationLabel(item)}</span>
             </button>,
           )}
@@ -237,14 +259,17 @@ export function App() {
 
         <section className="history-section" aria-label="最近运行">
           <div className="sidebar-heading"><span>最近运行</span><Clock3 size={13} /></div>
-          {history.length ? history.map(item => (
-            <button key={item.id} title={item.question}
-              className={'history-item ' + (page === 'ask' && runId === item.id ? 'active' : '')}
-              onClick={() => { setError(''); setPage('ask'); setRunId(item.id) }}>
-              <MessageSquareText size={14} /><span>{item.question}</span>
+          {history.length ? history.map(item => {
+            const active = page === 'ask' && runId === item.id
+            const timestamp = formatDate(item.created_at)
+            return <button key={item.id} title={item.question + ' · ' + timestamp}
+              aria-current={active ? 'true' : undefined} className={'history-item' + (active ? ' active' : '')}
+              onClick={() => navigate('ask', item.id)}>
+              <MessageSquareText size={15} />
+              <span className="history-copy"><span>{item.question}</span><time dateTime={item.created_at}>{timestamp}</time></span>
               {isActive(item.status) && <i className="queue-dot" />}
             </button>
-          )) : <p className="history-empty">完成一次提问后显示</p>}
+          }) : <p className="history-empty">完成一次提问后显示</p>}
         </section>
 
         <div className="account">
@@ -273,17 +298,22 @@ export function App() {
         <div className="top-actions">
           <span className="mode-indicator" title={session.model ?? undefined}><i />{session.model ? '模型已配置' : '本地摘录'}</span>
           <a className="icon-button api-link" href="/docs" target="_blank" rel="noreferrer" title="API 文档" aria-label="API 文档"><CircleHelp size={18} /></a>
+          <button className="button new-question" type="button" disabled={busy} onClick={startQuestion}>
+            <Plus size={16} /> 新建问答
+          </button>
         </div>
       </header>
 
       <main className="main-content">
         {error && <div className="notice error" role="alert">{error}</div>}
-        {page === 'ask' && <Workbench run={current} busy={busy} draft={draft} setDraft={setDraft}
-          scope={scope} projects={session.projects} ask={ask} showCitation={showCitation}
-          team={team} stop={stop} setup={admin ? () => setPage('team') : undefined} />}
-        {page === 'library' && <Library projects={session.projects} open={setDocument} />}
-        {page === 'benchmark' && (team ? admin && <WorkspaceQuality projects={session.projects} /> : <Benchmark />)}
-        {page === 'team' && admin && <TeamWorkspace onProjectChanged={syncProjects} />}
+        <div className="view-stage" key={page}>
+          {page === 'ask' && <Workbench run={current} opening={opening} busy={busy} starting={starting} questionInput={questionInput}
+            draft={draft} setDraft={setDraft} scope={scope} projects={session.projects} ask={ask}
+            showCitation={showCitation} team={team} stop={stop} setup={admin ? () => navigate('team') : undefined} />}
+          {page === 'library' && <Library projects={session.projects} open={setDocument} />}
+          {page === 'benchmark' && (team ? admin && <WorkspaceQuality projects={session.projects} /> : <Benchmark />)}
+          {page === 'team' && admin && <TeamWorkspace onProjectChanged={syncProjects} />}
+        </div>
       </main>
       {page === 'ask' && <EvidencePanel key={runId ?? 'initial'} run={current} showCitation={showCitation} />}
       {document && <DocumentDialog target={document} close={() => setDocument(null)} />}
@@ -304,7 +334,7 @@ function LoginPage({ onLogin }: { onLogin: (role: Role, key: string) => Promise<
   }
   return <main className="loading login-page">
     <form className="surface login-form" onSubmit={submit}>
-      <Waypoints size={30} /><h1>登录 ScopeBrief</h1>
+      <span className="brand-mark"><Waypoints size={21} /></span><h1>登录 ScopeBrief</h1>
       <label>角色<select value={role} onChange={event => setRole(event.target.value as Role)}>
         <option value="member">项目成员</option><option value="reviewer">评审者</option>
       </select></label>

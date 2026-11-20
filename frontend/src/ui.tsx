@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { Activity, ClipboardList, GitBranch, Shield, X } from 'lucide-react'
+import { X } from 'lucide-react'
 
 export function Modal({ label, close, drawer, children }: {
   label: string; close: () => void; drawer?: boolean; children: ReactNode
@@ -8,8 +8,12 @@ export function Modal({ label, close, drawer, children }: {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
     const dialog = ref.current
+    const trigger = document.activeElement
     dialog?.showModal()
-    return () => dialog?.close()
+    return () => {
+      dialog?.close()
+      if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus({ preventScroll: true })
+    }
   }, [])
   return <dialog ref={ref} aria-label={label} className={drawer ? 'dialog drawer' : 'dialog'}
     onCancel={event => { event.preventDefault(); close() }}
@@ -30,14 +34,4 @@ export function ProjectIcon({ name, color }: { name: string; color: string }) {
 export function Blank({ icon, title, detail }: { icon: ReactNode; title: string; detail: string }) {
   return <div className="blank-state"><span className="blank-icon">{icon}</span>
     <strong>{title}</strong><p>{detail}</p></div>
-}
-
-export function WorkflowIllustration() {
-  return <div className="workflow-art" aria-hidden="true">
-    <span className="orbit orbit-one" /><span className="orbit orbit-two" />
-    <div className="workflow-node node-in"><ClipboardList size={26} /></div>
-    <div className="workflow-node node-core"><GitBranch size={36} /></div>
-    <div className="workflow-node node-out"><Shield size={22} /></div>
-    <div className="workflow-node node-audit"><Activity size={17} /></div>
-  </div>
 }

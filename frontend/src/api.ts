@@ -98,11 +98,13 @@ export const labels: Record<string, string> = {
   general: '相关资料',
 }
 
+const workspaceDateFormat = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric',
+  hour: '2-digit', minute: '2-digit', hour12: false,
+})
+
 export function formatDate(iso: string) {
-  return new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  }).format(new Date(iso))
+  return workspaceDateFormat.format(new Date(iso))
 }
 
 export async function api<T>(path: string, body?: unknown): Promise<T> {
