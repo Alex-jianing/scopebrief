@@ -1,30 +1,21 @@
-/* Google Fonts text subset of the fixed page and account headings. */
+/* Frex Sans GB v1.100 subset of the Chinese UI strings and sample project labels. */
 @font-face {
-  font-family: "Noto Serif SC";
-  src: url("./assets/fonts/noto-serif-sc-headings-650.woff2") format("woff2");
+  font-family: "Frex Sans GB UI";
+  src: url("./assets/fonts/frex-sans-gb-ui.woff2") format("woff2");
   font-style: normal;
-  font-weight: 650;
-  font-display: swap;
-}
-
-/* Chinese UI strings and demo project labels share a compact font. */
-@font-face {
-  font-family: "Noto Sans SC UI";
-  src: url("./assets/fonts/noto-sans-sc-ui.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 100 900;
+  font-weight: 100 700;
   font-display: swap;
   unicode-range: U+3000-303F, U+3400-9FFF, U+F900-FAFF, U+FF01-FF60;
 }
 
 :root {
-  --font-cjk: "Noto Sans SC UI", "Noto Sans SC Variable", "Microsoft YaHei UI", "PingFang SC";
-  --font-ui: "Geist Variable", var(--font-cjk), system-ui, sans-serif;
-  --font-heading: "Noto Serif SC", var(--font-ui);
+  --font-cjk: "Frex Sans GB UI", "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei UI";
+  --font-ui: "Inter Variable", var(--font-cjk), system-ui, sans-serif;
   --mono: "Geist Mono Variable", "Cascadia Mono", Consolas, var(--font-cjk), monospace;
   font-family: var(--font-ui);
   color: #1b2924;
   background: #f3f5f0;
+  font-optical-sizing: auto;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   --ink: #1b2924;
@@ -115,7 +106,7 @@ h1, h2, h3, p { margin: 0; }
   background: linear-gradient(155deg, #d5eee0, #9dcab2);
   box-shadow: inset 0 1px 0 #fff8, 0 3px 10px #061e1550;
 }
-.brand strong { display: block; color: #f4faf6; font-size: 22px; font-weight: 660; line-height: 1.12; letter-spacing: -.04em; }
+.brand strong { display: block; color: #f4faf6; font-size: 22px; font-weight: 650; line-height: 1.12; letter-spacing: -.05em; }
 .brand small { display: block; margin-top: 4px; color: var(--side-muted); font-size: 11px; letter-spacing: .06em; }
 .primary-nav { display: grid; gap: 4px; }
 .nav-link, .history-item {
@@ -381,23 +372,20 @@ h1, h2, h3, p { margin: 0; }
 .hero h1 {
   margin: 12px 0 12px;
   color: #f5faf6;
-  font-size: clamp(31px, 3.16vw, 49px);
-  line-height: 1.24;
+  font-size: clamp(30px, 3.13vw, 48px);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -.02em;
 }
-.hero p { color: #ccddd4; font-size: 14px; line-height: 1.85; }
+.hero p { color: #ccddd4; font-size: 14px; line-height: 1.75; }
 .run-heading { padding: 7px 0 0; animation: appear 230ms var(--ease) both; }
 .run-heading h1, .page-heading h1 {
   margin: 7px 0 12px;
   font-size: clamp(25px, 2.65vw, 40px);
-  font-weight: 650;
-  line-height: 1.32;
-  letter-spacing: -.01em;
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: -.019em;
   overflow-wrap: anywhere;
-}
-.hero h1, .page-heading h1, .login-form h1 {
-  font-family: var(--font-heading);
-  font-weight: 650;
-  letter-spacing: .025em;
 }
 .run-meta {
   display: flex;
@@ -793,7 +781,7 @@ tbody tr:hover td { background: #f3f7f3; }
     #10231f url("./assets/evidence-hero.webp") center / cover no-repeat;
 }
 .login-form { width: min(350px, calc(100vw - 32px)); padding: 27px; color: var(--ink); box-shadow: 0 15px 60px #0d20197a; animation: appear 240ms var(--ease) both; }
-.login-form h1 { margin-bottom: 3px; font-size: 25px; }
+.login-form h1 { margin-bottom: 3px; font-size: 25px; font-weight: 600; line-height: 1.28; letter-spacing: -.025em; }
 .login-form :is(input, select) { min-height: 40px; font-size: 14px; }
 .team-login { width: min(398px, calc(100vw - 32px)); padding: 28px; }
 .login-toggle { justify-self: center; padding: 5px; }
