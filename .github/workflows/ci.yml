@@ -35,6 +35,6 @@ jobs:
             docker logs "$container"
             exit 1
           fi
-          curl --fail --silent --show-error http://127.0.0.1:8799/ | grep -F '<title>ScopeBrief'
+          curl --fail --silent --show-error http://127.0.0.1:8799/ | grep -F '<title>问据 · 团队知识工作台</title>'
           curl --fail --silent --show-error http://127.0.0.1:8799/api/session | grep -F '"mode":"team"'
           docker exec "$container" /app/.venv/bin/python -m scopebrief.admin bootstrap >/dev/null
