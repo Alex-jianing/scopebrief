@@ -29,10 +29,12 @@ jobs:
       - run: docker build --tag scopebrief:ci .
       - name: Smoke-test the container
         run: |
-          container="$(docker run --detach --publish 127.0.0.1:8799:8000 scopebrief:ci)"
+          container="$(docker run --detach --env SCOPEBRIEF_DEMO=0 --publish 127.0.0.1:8799:8000 scopebrief:ci)"
           trap 'docker rm -f "$container" >/dev/null' EXIT
           if ! curl --fail --silent --show-error --retry 12 --retry-all-errors --retry-delay 1 --max-time 3 http://127.0.0.1:8799/api/health; then
             docker logs "$container"
             exit 1
           fi
           curl --fail --silent --show-error http://127.0.0.1:8799/ | grep -F '<title>ScopeBrief'
+          curl --fail --silent --show-error http://127.0.0.1:8799/api/session | grep -F '"mode":"team"'
+          docker exec "$container" /app/.venv/bin/python -m scopebrief.admin bootstrap >/dev/null

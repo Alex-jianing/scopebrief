@@ -1,59 +1,34 @@
 import asyncio
-import hashlib
 import json
-import logging
 import secrets
-import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlsplit
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, StringConstraints
+from starlette.concurrency import run_in_threadpool
 
+from .api_models import Archive, Ask, FeedbackInput, Publish, SharedLogin, Slug
 from .benchmark import offline_report
-from .harness import answer
+from .http_session import COOKIE as COOKIE
+from .http_session import SessionDep, current_session, replace_session, session_data
+from .identity import Conflict, Denied, QueueFull, Session
+from .intake import UPLOAD_BYTES, import_document, source_name
 from .model import ChatModel
+from .review import Review
+from .run_queue import QUEUE_CAPACITY, RunQueue
 from .settings import Settings
-from .store import TERMINAL, Role, Store
+from .store import TERMINAL, Store
+from .team import Team
+from .team_routes import router as team_router
 
-COOKIE = "scopebrief_session"
-SESSION_TTL = 12 * 60 * 60
-MAX_ACTIVE = 4
 STATIC = Path(__file__).resolve().parents[1] / "frontend" / "dist"
-LOG = logging.getLogger(__name__)
-
-Slug = Annotated[str, StringConstraints(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=40)]
-QuestionText = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=2, max_length=600)
-]
-Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=100)]
-
-
-class Ask(BaseModel):
-    question: QuestionText
-    project_ids: list[Slug] = Field(min_length=1, max_length=3)
-
-
-class Login(BaseModel):
-    role: Role
-    key: str = Field(default="", max_length=512)
-
-
-class Publish(BaseModel):
-    project_id: Slug
-    key: Slug
-    title: Title
-    body: str = Field(min_length=1, max_length=16000)
-
-
-def session_id(request: Request) -> str:
-    token = request.cookies.get(COOKIE, "")
-    return hashlib.sha256(token.encode()).hexdigest() if len(token) == 43 else ""
+JSON_BYTES = 2_400_000
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -61,32 +36,48 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if bool(settings.model_base_url) != bool(settings.model_name):
         raise ValueError("Model configuration requires both a base URL and a model name")
     store = Store(settings.db)
-    active: set[asyncio.Task] = set()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        store.initialize()
+        store.initialize(seed=settings.mode != "team")
         store.recover_runs()
+        app.state.import_slots = asyncio.Semaphore(2)
+        app.state.evaluate_lock = asyncio.Lock()
         async with httpx.AsyncClient(timeout=settings.model_timeout, trust_env=False) as client:
-            app.state.model = ChatModel(settings, client) if settings.model_name else None
-            yield
-            for task in active.copy():
-                task.cancel()
-            await asyncio.gather(*active, return_exceptions=True)
+            model = ChatModel(settings, client) if settings.model_name else None
+            queue = RunQueue(store, settings.mode, model)
+            app.state.queue = queue
+            try:
+                yield
+            finally:
+                await queue.close()
 
-    app = FastAPI(title="ScopeBrief", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="ScopeBrief", version="2.0.0", lifespan=lifespan)
+    app.state.settings = settings
+    app.state.store = store
+    app.state.team = Team(store)
+    app.state.review = Review(store)
+    app.include_router(team_router)
 
     @app.middleware("http")
     async def private_responses(request: Request, call_next):
-        if (
-            request.url.path.startswith("/api/")
-            and request.method == "POST"
-            and request.headers.get("sec-fetch-site") == "cross-site"
-        ):
-            return JSONResponse({"detail": "请从工作台页面发起操作。"}, status_code=403)
+        api = request.url.path.startswith("/api/")
+        if api and request.method == "POST":
+            origin = request.headers.get("origin")
+            host = request.headers.get("host", "")
+            if request.headers.get("sec-fetch-site") == "cross-site" or (
+                origin and urlsplit(origin).netloc.casefold() != host.casefold()
+            ):
+                return JSONResponse({"detail": "请从工作台页面发起操作。"}, status_code=403)
+            declared = request.headers.get("content-length", "")
+            limit = UPLOAD_BYTES if request.url.path == "/api/intake/preview" else JSON_BYTES
+            if declared.isdigit() and int(declared) > limit:
+                return JSONResponse({"detail": "请求超过允许的大小。"}, status_code=413)
         response = await call_next(request)
-        if request.url.path.startswith("/api/"):
+        if api:
             response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "same-origin"
         return response
 
     @app.exception_handler(RequestValidationError)
@@ -94,148 +85,154 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         fields = "、".join(dict.fromkeys(str(error["loc"][-1]) for error in exc.errors()))
         return JSONResponse({"detail": f"请检查输入字段 {fields}。"}, status_code=422)
 
-    def start_session(request: Request, response: Response, role: Role) -> None:
-        old = session_id(request)
-        if old:
-            store.remove_session(old)
-        token = secrets.token_urlsafe(32)
-        store.add_session(hashlib.sha256(token.encode()).hexdigest(), role, SESSION_TTL)
-        response.set_cookie(
-            COOKIE,
-            token,
-            max_age=SESSION_TTL,
-            httponly=True,
-            secure=settings.secure_cookie,
-            samesite="strict",
-            path="/api",
-        )
+    @app.exception_handler(Denied)
+    async def denied(_request: Request, exc: Denied):
+        return JSONResponse({"detail": str(exc)}, status_code=403)
 
-    def require_session(request: Request) -> tuple[str, Role]:
-        identity = session_id(request)
-        role = store.get_role(identity)
-        if role is None:
-            raise HTTPException(401, "请先登录项目证据台。")
-        return identity, role
+    @app.exception_handler(Conflict)
+    async def conflict(_request: Request, exc: Conflict):
+        return JSONResponse({"detail": str(exc)}, status_code=409)
 
-    def session_data(role: Role | None) -> dict:
-        return {
-            "role": role,
-            "demo": settings.demo,
-            "model": settings.model_name or None,
-            "projects": [p.public() for p in store.projects(role)] if role else [],
-        }
+    @app.exception_handler(QueueFull)
+    async def overloaded(_request: Request, exc: QueueFull):
+        return JSONResponse({"detail": str(exc)}, status_code=429)
 
-    def owned_run(owner: str, run_id: str) -> dict:
-        run = store.run(owner, run_id)
+    @app.exception_handler(LookupError)
+    async def not_found(_request: Request, exc: LookupError):
+        return JSONResponse({"detail": str(exc)}, status_code=404)
+
+    @app.exception_handler(ValueError)
+    async def invalid(_request: Request, exc: ValueError):
+        return JSONResponse({"detail": str(exc)}, status_code=422)
+
+    def owned_run(session: Session, run_id: str) -> dict:
+        run = store.run(session, run_id)
         if run is None:
             raise HTTPException(404, "未找到该运行。")
         return run
 
     @app.get("/api/health")
     def health():
+        with store.connect() as conn:
+            conn.execute("SELECT 1 FROM workspace_settings LIMIT 1").fetchone()
         return {"status": "ok"}
 
     @app.get("/api/session")
     def session(request: Request, response: Response):
-        role = store.get_role(session_id(request))
-        if role is None and settings.demo:
-            role = "member"
-            start_session(request, response, role)
-        return session_data(role)
+        current = current_session(request)
+        if current is None and settings.demo:
+            current = replace_session(request, response, "member")
+        return session_data(request, current)
 
     @app.post("/api/session")
-    def login(request: Request, response: Response, payload: Login):
-        if not settings.demo:
+    def login(request: Request, response: Response, payload: SharedLogin):
+        if settings.mode == "team":
+            raise HTTPException(404, "请使用团队账号登录。")
+        if settings.mode == "shared":
             expected = settings.member_key if payload.role == "member" else settings.reviewer_key
             if not expected or not secrets.compare_digest(payload.key.encode(), expected.encode()):
                 raise HTTPException(401, "角色口令无效。")
-        start_session(request, response, payload.role)
-        return session_data(payload.role)
+        return session_data(request, replace_session(request, response, payload.role))
 
     @app.get("/api/documents")
-    def documents(identity: Annotated[tuple[str, Role], Depends(require_session)]):
-        return store.documents(identity[1])
+    def documents(session: SessionDep):
+        return store.documents(session.access)
 
     @app.get("/api/documents/{document_id}")
-    def document(document_id: str, identity: Annotated[tuple[str, Role], Depends(require_session)]):
-        rows = store.documents(identity[1], document_id)
+    def document(document_id: str, session: SessionDep):
+        rows = store.documents(session.access, document_id)
         if not rows:
             raise HTTPException(404, "未找到该资料。")
         return rows[0]
 
-    @app.post("/api/documents", status_code=201)
-    def publish(payload: Publish, identity: Annotated[tuple[str, Role], Depends(require_session)]):
-        if identity[1] != "reviewer":
-            raise HTTPException(403, "评审者可以发布文档。")
-        if payload.project_id not in {p.id for p in store.projects(identity[1])}:
-            raise HTTPException(404, "未找到该项目。")
-        try:
-            doc_id = store.publish(payload.project_id, payload.key, payload.title, payload.body)
-        except ValueError as exc:
-            raise HTTPException(422, str(exc)) from exc
-        return store.documents(identity[1], doc_id)[0]
+    @app.post("/api/intake/preview")
+    async def intake(
+        request: Request,
+        session: SessionDep,
+        project_id: Slug,
+        filename: Annotated[str, Query(min_length=1, max_length=220)],
+    ):
+        if project_id not in {p.id for p in store.projects(session.access, writable=True)}:
+            raise Denied("当前身份无法向此项目导入资料。")
+        slots = request.app.state.import_slots
+        if slots.locked():
+            raise QueueFull("其他文件正在解析，请稍后再试。")
+        async with slots:
+            data = bytearray()
+            async for chunk in request.stream():
+                if len(data) + len(chunk) > UPLOAD_BYTES:
+                    raise HTTPException(413, "单个文件上限为 8 MiB。")
+                data.extend(chunk)
+            return await run_in_threadpool(import_document, filename, bytes(data))
 
-    async def execute(run_id: str, role: Role, payload: Ask):
-        try:
-            result = await answer(
-                store,
-                role,
-                payload.question,
-                payload.project_ids,
-                model=app.state.model,
-                on_event=lambda stage, detail, ms: store.add_event(run_id, stage, detail, ms),
-            )
-            store.finish_run(run_id, result)
-        except asyncio.CancelledError:
-            store.finish_run(run_id, None, "运行已中断，请重新提问。")
-            raise
-        except sqlite3.IntegrityError:
-            # A session can be replaced while a provider request is outstanding.
-            store.finish_run(run_id, None, "会话已切换，请重新提问。")
-        except Exception:
-            LOG.exception("Run %s failed", run_id)
-            store.finish_run(run_id, None, "运行失败，请重新提问。")
+    @app.post("/api/documents", status_code=201)
+    def publish(payload: Publish, session: SessionDep):
+        doc_id = store.publish(
+            payload.project_id,
+            payload.key,
+            payload.title,
+            payload.body,
+            access=session.access,
+            source_name=source_name(payload.source_name),
+            change_note=payload.change_note,
+            expected_revision=payload.expected_revision,
+            create_only=payload.create_only,
+        )
+        visible = store.documents(session.access, doc_id)
+        if not visible:
+            raise Denied("资料已发布，当前会话的项目权限已变化。")
+        return visible[0]
+
+    @app.post("/api/documents/{project_id}/{key}/archive")
+    def archive(project_id: Slug, key: Slug, payload: Archive, session: SessionDep):
+        store.archive(session.access, project_id, key, payload.archived)
+        return {"ok": True}
 
     @app.post("/api/runs", status_code=202)
-    async def start(payload: Ask, identity: Annotated[tuple[str, Role], Depends(require_session)]):
-        owner, role = identity
+    async def start(request: Request, payload: Ask, session: SessionDep):
         ids = set(payload.project_ids)
-        if len(ids) != len(payload.project_ids) or not ids <= {p.id for p in store.projects(role)}:
+        if len(ids) != len(payload.project_ids) or not ids <= {
+            p.id for p in store.projects(session.access)
+        }:
             raise HTTPException(404, "所选项目范围不可用。")
-        if len(active) >= MAX_ACTIVE:
-            raise HTTPException(429, "运行队列已满，请稍后重试。")
         run_id = secrets.token_hex(12)
-        try:
-            store.start_run(owner, run_id, payload.question, payload.project_ids)
-        except sqlite3.IntegrityError as exc:
-            if store.get_role(owner) is None:
-                raise HTTPException(401, "会话已切换，请重新提问。") from exc
-            raise HTTPException(409, "当前会话已有一条运行。") from exc
-        task = asyncio.create_task(execute(run_id, role, payload))
-        active.add(task)
-        task.add_done_callback(active.discard)
+        store.enqueue(session, run_id, payload.question, payload.project_ids, QUEUE_CAPACITY)
+        request.app.state.queue.notice()
         return {"id": run_id}
 
     @app.get("/api/runs")
-    def runs(identity: Annotated[tuple[str, Role], Depends(require_session)]):
-        return store.runs(identity[0])
+    def runs(session: SessionDep):
+        return store.runs(session)
 
     @app.get("/api/runs/{run_id}")
-    def get_run(run_id: str, identity: Annotated[tuple[str, Role], Depends(require_session)]):
-        return owned_run(identity[0], run_id)
+    def get_run(run_id: str, session: SessionDep):
+        return owned_run(session, run_id)
+
+    @app.post("/api/runs/{run_id}/cancel")
+    async def cancel(request: Request, run_id: str, session: SessionDep):
+        owned_run(session, run_id)
+        if store.cancel(run_id):
+            request.app.state.queue.cancel(run_id)
+        return owned_run(session, run_id)
+
+    @app.post("/api/runs/{run_id}/feedback")
+    def feedback(run_id: str, payload: FeedbackInput, session: SessionDep):
+        store.save_feedback(session, run_id, payload.rating, payload.note)
+        return owned_run(session, run_id)
 
     @app.get("/api/runs/{run_id}/events")
-    async def events(
-        request: Request,
-        run_id: str,
-        identity: Annotated[tuple[str, Role], Depends(require_session)],
-    ):
-        owner, _ = identity
-        initial = owned_run(owner, run_id)
+    async def events(request: Request, run_id: str, session: SessionDep):
+        initial = owned_run(session, run_id)
 
         async def stream():
             snapshot, previous = initial, None
             while snapshot and not await request.is_disconnected():
+                live = current_session(request)
+                if live is None or live.id != session.id:
+                    break
+                snapshot = store.run(live, run_id)
+                if not snapshot:
+                    break
                 revision = (snapshot["status"], len(snapshot["events"]))
                 if revision != previous:
                     encoded = json.dumps(snapshot, ensure_ascii=False)
@@ -243,10 +240,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     previous = revision
                 if snapshot["status"] in TERMINAL:
                     break
-                await asyncio.sleep(0.2)
-                if store.get_role(owner) is None:
-                    break
-                snapshot = store.run(owner, run_id)
+                await asyncio.sleep(0.25)
 
         return StreamingResponse(
             stream(),
@@ -255,7 +249,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     @app.post("/api/benchmark")
-    def benchmark(_identity: Annotated[tuple[str, Role], Depends(require_session)]):
+    def benchmark(_session: SessionDep):
         return offline_report()
 
     if (STATIC / "assets").is_dir():

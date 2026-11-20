@@ -1,12 +1,25 @@
 # ScopeBrief · 项目证据台
 
-面向并行推进多个项目的团队，提供可核对的上线评审问答。输入一个问题，就能对比各项目的放行结论、阻塞事项与回退方案，并沿着引用查到当时使用的文档版本和原文行号。
+ScopeBrief 是面向单个团队、多项目协作的知识工作台。管理员创建项目并发放一次性邀请，成员按项目权限导入或查阅资料。问答引用可打开当时使用的版本和原文行号。团队可把一条需要复核的回答沉淀为用例，在更新资料后复跑。
 
 > 演示项目、人物和资料均为合成数据。
 
 ![跨项目问答与证据来源](docs/images/workbench.png)
 
-## 五分钟上手
+## 建立团队工作区
+
+正式模式从空知识库启动，使用独立账号和项目级读写权限。资料支持 Markdown、TXT、文本型 PDF 和 DOCX，单份发布、批量导入、版本冲突检测、归档和恢复都在工作台完成。项目、成员权限和资料变更有操作记录。
+
+有 Docker Compose 时，在仓库根目录启动团队实例并生成首次激活码。
+
+~~~sh
+SCOPEBRIEF_DEMO=0 docker compose up --build -d
+docker compose exec scopebrief /app/.venv/bin/python -m scopebrief.admin bootstrap
+~~~
+
+在 Windows PowerShell 可先运行 `$env:SCOPEBRIEF_DEMO='0'`，再运行上述两条 Docker 命令，其中第一条从 `docker compose` 开始。打开工作台，选「我有邀请码」，输入终端打印的码并设置管理员密码。Python 直跑、数据迁移、备份与 HTTPS 配置见 [团队部署与运维](docs/TEAM.md)。
+
+## 打开合成演示
 
 准备 Python 3.12、[uv](https://docs.astral.sh/uv/getting-started/installation/) 和 Node.js 24。在仓库根目录运行。
 
@@ -32,8 +45,8 @@ uv run --locked uvicorn scopebrief.app:app --host 127.0.0.1 --port 8000
 ~~~mermaid
 flowchart LR
     UI["React 工作台"] --> API["FastAPI 会话与范围校验"]
-    API --> Run["创建运行并保存轨迹"]
-    Run --> Search["按项目读取最新文档版本 · BM25"]
+    API --> Run["持久化队列 · SSE 轨迹"]
+    Run --> Search["授权项目与当前版本 · 全文索引和 BM25"]
     Search --> Check["检查项目覆盖 · 复查放行冲突"]
     Check -->|缺项或冲突| Retry["按项目和资料类型定向补查"]
     Retry --> Context["收集引文 · 限制上下文"]
@@ -47,14 +60,14 @@ flowchart LR
     Run --- DB
 ~~~
 
-- **权限**。会话角色由服务端从 Cookie 解析。SQLite 查询按角色与项目范围约束正文、文档版本和运行回放。
+- **权限**。服务端从 Cookie 识别账号。SQLite 查询检查该账号的项目权限，在正文、文档版本和运行回放中执行相同的访问约束。
 - **时效**。同一项目与文档键下事务内分配递增版本。Harness 先取当前版本，再检索。独立文档的当前结论冲突时，展示双方原文并交给人确认。
 - **有界执行**。先做 BM25 初筛，再按所问资料类型补查。单次最多使用 9 条片段、4,000 字原文和一次模型请求。调用失败或校验失败时，保留可核对的原文摘录。
-- **可追溯**。服务端保存阶段、耗时、结果和引用快照。刷新页面后可以继续查看。在途运行遇到服务重启会标记失败，用户可重新提问。
+- **可追溯**。团队账号的历史保留到重新登录之后。服务端保存队列、阶段、耗时、结果和引用快照。服务重启后继续执行已排队的任务，被打断的在途任务会显示失败原因。
 
 ## 评测结果
 
-这组结果来自仓库内的 28 条合成回归用例。两种策略使用相同的问题、项目权限、BM25 打分与原文输出。基线从授权项目的全部版本全局取 Top-4，Harness 增加当前版本过滤和按项目、资料类型补查。
+下表记录初版 28 条合成回归用例的结果。重新运行评测会包含后续新增用例。两种策略使用相同的问题、项目权限、BM25 打分与原文输出。基线从授权项目的全部版本全局取 Top-4，Harness 增加当前版本过滤和按项目、资料类型补查。
 
 | 指标 | BM25 基线 | ScopeBrief |
 | --- | ---: | ---: |
@@ -119,12 +132,13 @@ npm run test:e2e
 
 | 路径 | 责任 |
 | --- | --- |
-| `frontend/src/` | 问答、引用和轨迹面板、资料版本、评测界面 |
-| `scopebrief/app.py` | 会话、API、后台运行、SSE 快照与静态服务 |
-| `scopebrief/store.py` | 数据库约束、版本与项目范围、运行持久化 |
+| `frontend/src/` | 工作台、团队管理、资料库和业务回归 |
+| `scopebrief/app.py` · `scopebrief/team_routes.py` | API、会话、SSE 与静态服务 |
+| `scopebrief/store.py` · `scopebrief/run_queue.py` | 事务和权限、全文索引、版本和运行队列 |
+| `scopebrief/team.py` · `scopebrief/intake.py` · `scopebrief/review.py` | 团队、文件导入、反馈与业务用例 |
 | `scopebrief/retrieval.py` · `scopebrief/harness.py` | 中文 BM25、问题路由、证据覆盖与决策规则 |
 | `scopebrief/model.py` · `scopebrief/benchmark.py` | 模型适配、引文校验、评测 |
 | `scopebrief/fixtures/` | 合成语料、可复跑的标注用例 |
 | `tests/` · `frontend/e2e/` | 后端回归与浏览器端到端验证 |
 
-默认演示模式允许切换两个合成身份。关闭演示可设置 `SCOPEBRIEF_DEMO=0`，并为成员和评审者设置各自的长随机口令。使用 HTTPS 时开启 `SCOPEBRIEF_SECURE_COOKIE=1`。当前部署面向单 API 进程与小型 Markdown 语料。问题路由以明示项目别名和常见发布术语为主，陌生缩写与语义改写可能出现召回不足。
+合成演示和正式团队使用独立数据路径。部署边界、文件格式和评测口径见 [团队部署与运维](docs/TEAM.md)。

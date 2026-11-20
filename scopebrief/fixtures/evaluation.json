@@ -19,6 +19,20 @@
   {"id":"q05","group":"单项问答","title":"支付幂等通用检索","question":"北辰怎么使用 checkout_request_id 实现幂等设计？","expect":{"beichen":"grounded"},"sources":["beichen/design/1/general"]},
   {"id":"q06","group":"单项问答","title":"死信队列通用检索","question":"潮汐的退避重试与死信队列规则是什么？","expect":{"tide":"grounded"},"sources":["tide/design/1/general"]},
   {"id":"q07","group":"单项问答","title":"潮汐准入换一种问法","question":"消息中心该不该发版？","expect":{"tide":"hold"},"sources":["tide/release/2/decision"]},
+  {
+    "id":"q08",
+    "group":"跨文档",
+    "title":"北辰放行与回滚交叉核对",
+    "scope":["beichen"],
+    "question":"北辰现在能上线吗？灰度窗口、回滚阈值和值班负责人分别是什么？",
+    "expect":{"beichen":"go"},
+    "sources":[
+      "beichen/release/2/decision",
+      "beichen/release/2/window",
+      "beichen/rollback/1/rollback",
+      "beichen/rollback/1/owner"
+    ]
+  },
   {"id":"a01","group":"边界与权限","title":"未知预算","question":"北辰 2027 年的市场广告投放预算是多少？","status":"insufficient","sources":[]},
   {"id":"a02","group":"边界与权限","title":"未接入的知识主题","question":"潮汐办公室附近的停车费多少钱？","status":"insufficient","sources":[]},
   {"id":"a03","group":"边界与权限","title":"所选项目与问题不符","scope":["beichen"],"question":"潮汐可以上线吗？","status":"insufficient","sources":[]},

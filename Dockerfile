@@ -14,8 +14,7 @@ RUN uv sync --frozen --no-dev --no-install-project \
 COPY scopebrief/ scopebrief/
 COPY --from=frontend /app/frontend/dist frontend/dist/
 
-ENV SCOPEBRIEF_DB=/app/data/scopebrief.db \
-    PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONDONTWRITEBYTECODE=1
 USER 10001:10001
 EXPOSE 8000
 VOLUME ["/app/data"]

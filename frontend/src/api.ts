@@ -1,9 +1,14 @@
 export type Role = 'member' | 'reviewer'
-export type Project = { id: string; name: string; description: string; color: string }
-export type Session = { role: Role | null; demo: boolean; projects: Project[]; model: string | null }
+export type Project = { id: string; name: string; description: string; color: string; can_edit: boolean }
+export type Account = { id: string; username: string; name: string; admin: boolean }
+export type Session = {
+  role: Role | null; demo: boolean; mode: 'demo' | 'shared' | 'team'
+  projects: Project[]; model: string | null; account: Account | null
+}
 export type DocumentVersion = {
   id: string; project_id: string; key: string; title: string
   revision: number; published_at: string; current: boolean
+  archived_at: string | null; source_name: string; change_note: string
 }
 export type FullDocument = DocumentVersion & { body: string }
 export type Citation = {
@@ -25,10 +30,13 @@ export type Result = {
   citations: Citation[]
 }
 export type RunSummary = {
-  id: string; question: string; status: 'running' | 'done' | 'failed'; created_at: string
+  id: string; question: string; status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
+  created_at: string
 }
+export type Feedback = { rating: 'helpful' | 'review'; note: string; resolved_at: string | null }
 export type Run = RunSummary & {
   result: Result | null; error: string | null; scope: string[]
+  feedback: Feedback | null
   events: Array<{ id: number; stage: string; detail: string; elapsed_ms: number }>
 }
 export type Metrics = {
@@ -45,6 +53,39 @@ export type Report = {
     id: string; group: string; title: string; baseline: CaseOutcome; harness: CaseOutcome
   }>
 }
+export type Grants = Record<string, 'reader' | 'editor'>
+export type TeamMember = Account & { enabled: boolean; grants: Grants }
+export type TeamProject = Omit<Project, 'can_edit'> & { aliases: string[] }
+export type Invitation = {
+  id: string; label: string; grants: Grants; expires_at: number; used_by: string | null
+}
+export type TeamInfo = {
+  projects: TeamProject[]; members: TeamMember[]; invitations: Invitation[]
+  activity: Array<{ id: number; at: string; actor: string | null; action: string; target: string }>
+}
+export type ReviewStatus = Result['status']
+export type ReviewCase = {
+  id: string; title: string; question: string; scope: string[]; expected_status: ReviewStatus
+  required_sources: string[]; phrase: string; active: boolean
+}
+export type PendingFeedback = {
+  run_id: string; note: string; updated_at: string; question: string; scope: string[]; author: string
+}
+export type TeamReport = {
+  id: string; created_at: string; total: number; passed: number
+  cases: Array<{
+    id: string; title: string; expected_status: ReviewStatus; status: ReviewStatus
+    pass: boolean; missing: string[]; phrase_match: boolean; versions: string[]
+  }>
+}
+export type ReviewInfo = {
+  stats: { runs: number; pending: number; failed: number; tokens: number }
+  feedback: PendingFeedback[]; cases: ReviewCase[]
+  reports: Array<Omit<TeamReport, 'cases'>>
+}
+export type IntakeResult = { title: string; source_name: string; body: string }
+
+export const isActive = (status?: RunSummary['status']) => status === 'queued' || status === 'running'
 
 export const labels: Record<string, string> = {
   decision: '放行结论',
@@ -65,11 +106,21 @@ export function formatDate(iso: string) {
 }
 
 export async function api<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch('/api' + path, body === undefined ? undefined : {
+  return readResponse(await fetch('/api' + path, body === undefined ? undefined : {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  })
+  }))
+}
+
+export async function importPreview(projectId: string, file: File): Promise<IntakeResult> {
+  const query = new URLSearchParams({ project_id: projectId, filename: file.name })
+  return readResponse(await fetch('/api/intake/preview?' + query, {
+    method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file,
+  }))
+}
+
+async function readResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const error = await response.json().catch(() => null)
     throw new Error(error?.detail ?? '服务暂时不可用，请重试。')

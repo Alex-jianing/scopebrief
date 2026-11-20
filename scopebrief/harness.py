@@ -1,3 +1,4 @@
+import asyncio
 import re
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
@@ -6,6 +7,7 @@ from typing import Literal
 
 import httpx
 
+from .identity import Access, Account
 from .model import ChatModel
 from .retrieval import (
     TOPIC_LABELS,
@@ -15,7 +17,7 @@ from .retrieval import (
     question_terms,
     topics_for,
 )
-from .store import Evidence, Project, Role, Store
+from .store import Evidence, Project, Store
 
 Strategy = Literal["baseline", "harness"]
 Trace = Callable[[str, str, int], None]
@@ -48,6 +50,7 @@ def finding(
     topics: list[str],
     evidence: list[Evidence],
     strategy: Strategy,
+    team: bool,
 ) -> Finding:
     picked: dict[str, Evidence] = {}
     covered, missing = [], []
@@ -57,7 +60,8 @@ def finding(
             missing.append(topic)
             continue
         covered.append(topic)
-        picked[matches[0].id] = matches[0]
+        for item in matches[: (2 if topic == "general" and team else 1)]:
+            picked[item.id] = item
         if topic == "decision" and strategy == "harness":
             for item in matches[1:]:
                 if item.decision != matches[0].decision:
@@ -78,7 +82,7 @@ def finding(
 
 async def answer(
     store: Store,
-    role: Role,
+    role: Access,
     question: str,
     requested: list[str],
     strategy: Strategy = "harness",
@@ -93,7 +97,8 @@ async def answer(
 
     available = store.projects(role)
     selected = [project for project in available if project.id in requested]
-    named = explicitly_named(question, store.projects("reviewer"))
+    team = isinstance(role, Account)
+    named = explicitly_named(question, available if team else store.projects("reviewer"))
     scope = [p for p in selected if not named or p in named]
     scope_limited = any(p not in selected for p in named)
     scope_detail = "部分提及项目超出可用范围。" if scope_limited else ""
@@ -102,13 +107,32 @@ async def answer(
     event("plan", "查找" + "、".join(TOPIC_LABELS[t] for t in topics) + "。")
 
     terms = question_terms(question, scope)
-    corpus = store.evidence(role, [p.id for p in scope], current_only=strategy == "harness")
-    ranking = bm25(terms, corpus)
-    retrieved = [row.evidence for row in ranking if general_hit(row, terms)][:TOP_K]
+    corpus = await asyncio.to_thread(
+        store.evidence,
+        role,
+        [p.id for p in scope],
+        current_only=strategy == "harness",
+        match_terms=terms if team else None,
+        topics=[t for t in topics if t != "general"] if team else None,
+    )
+    ranking = await asyncio.to_thread(bm25, terms, corpus)
+    relevant = [
+        row.evidence
+        for row in ranking
+        if general_hit(row, terms) or (team and len(terms) == 1 and row.hits == 1)
+    ]
+    retrieved = relevant[:TOP_K]
+    if team:
+        retrieved = [
+            entry
+            for project in scope
+            for entry in [item for item in relevant if item.project_id == project.id][:TOP_K]
+        ]
     corpus_label = "当前版本" if strategy == "harness" else "全部版本"
     event(
         "retrieve",
-        f"对 {len(corpus)} 条授权的{corpus_label}片段执行 BM25，初筛 {len(retrieved)} 条。",
+        f"对 {len(corpus)} 条授权的{corpus_label}片段执行 BM25，初筛 {len(retrieved)} 条。"
+        + ("正文候选由全文索引提供。" if team else ""),
     )
 
     by_project = {p.id: [e for e in retrieved if e.project_id == p.id] for p in scope}
@@ -134,7 +158,15 @@ async def answer(
         if added:
             event("retry", f"按项目和资料标签复查，补查 {added} 条用于覆盖缺项或核对放行冲突。")
 
-    findings = [finding(project, topics, by_project[project.id], strategy) for project in scope]
+    findings = [
+        finding(project, topics, by_project[project.id], strategy, team) for project in scope
+    ]
+    if team:
+        for row in findings:
+            related = [item for item in relevant if item.project_id == row.project_id]
+            if row.missing and not row.sources and related:
+                row.sources.append(related[0])
+                row.status = "grounded" if "decision" not in topics else "insufficient"
     evidence: list[Evidence] = []
     char_count = 0
     overflow = False

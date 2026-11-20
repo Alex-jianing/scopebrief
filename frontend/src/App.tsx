@@ -3,20 +3,24 @@ import type { FormEvent } from 'react'
 import {
   BookOpen, ChartNoAxesCombined, Check, ChevronDown, ChevronRight,
   CircleHelp, Clock3, MessageSquareText, PanelsTopLeft,
-  Shield, Waypoints,
+  Shield, UsersRound, Waypoints,
 } from 'lucide-react'
-import { api, errorText } from './api'
+import { api, errorText, isActive } from './api'
 import type { Citation, Role, Run, RunSummary, Session } from './api'
 import { Benchmark } from './Benchmark'
 import { DocumentDialog, Library } from './Library'
 import type { DocumentTarget } from './Library'
 import { ProjectIcon } from './ui'
 import { EvidencePanel, Workbench } from './Workbench'
+import { TeamWorkspace } from './Team'
+import { WorkspaceQuality } from './WorkspaceQuality'
+import { TeamLogin } from './TeamLogin'
 
 const pages = [
   { id: 'ask', label: '评审问答', icon: PanelsTopLeft },
   { id: 'library', label: '项目资料', icon: BookOpen },
   { id: 'benchmark', label: '回归评测', icon: ChartNoAxesCombined },
+  { id: 'team', label: '团队管理', icon: UsersRound },
 ] as const
 type Page = typeof pages[number]['id']
 const roles = { member: '项目成员', reviewer: '评审者' }
@@ -35,7 +39,7 @@ export function App() {
 
   function receiveSession(value: Session) {
     setSession(value)
-    setScope(value.projects.map(project => project.id))
+    setScope(value.projects.slice(0, value.mode === 'team' ? 3 : 12).map(project => project.id))
     setHistory([])
     setRunId(null)
     setRun(null)
@@ -66,7 +70,7 @@ export function App() {
     function receive(snapshot: Run) {
       if (ignore) return
       setRun(snapshot)
-      if (snapshot.status !== 'running') {
+      if (!isActive(snapshot.status)) {
         events.close()
         api<RunSummary[]>('/runs')
           .then(rows => { if (!ignore) setHistory(rows) })
@@ -77,7 +81,7 @@ export function App() {
       api<Run>('/runs/' + runId).then(snapshot => {
         if (ignore) return
         receive(snapshot)
-        if (snapshot.status === 'running') pollTimer = setTimeout(poll, 800)
+        if (isActive(snapshot.status)) pollTimer = setTimeout(poll, 800)
       }).catch(err => {
         if (!ignore) {
           setError(errorText(err))
@@ -98,7 +102,7 @@ export function App() {
   }, [runId, session])
 
   const current = run?.id === runId ? run : null
-  const busy = starting || current?.status === 'running' || Boolean(runId && !current)
+  const busy = starting || isActive(current?.status) || Boolean(runId && !current)
 
   async function ask(question: string) {
     const text = question.trim()
@@ -109,8 +113,8 @@ export function App() {
       const response = await api<{ id: string }>('/runs', { question: text, project_ids: scope })
       setPage('ask')
       setRunId(response.id)
-      setRun({ id: response.id, question: text, status: 'running', scope,
-        created_at: new Date().toISOString(), result: null, error: null, events: [] })
+      setRun({ id: response.id, question: text, status: 'queued', scope,
+        created_at: new Date().toISOString(), result: null, error: null, feedback: null, events: [] })
       setDraft('')
     } catch (err) {
       setError(errorText(err))
@@ -125,6 +129,54 @@ export function App() {
     setPage('ask')
   }
 
+  async function syncProjects() {
+    const next = await api<Session>('/session')
+    const allowed = new Set(next.projects.map(project => project.id))
+    setSession(next)
+    setScope(items => {
+      const valid = items.filter(id => allowed.has(id))
+      return valid.length || !next.projects.length ? valid : [next.projects[0].id]
+    })
+    if (!next.account && next.mode === 'team') {
+      receiveSession(next)
+      setPage('ask')
+    }
+  }
+
+  useEffect(() => {
+    if (session?.mode !== 'team' || !session.account) return
+    let ignore = false
+    const refresh = async () => {
+      try {
+        const next = await api<Session>('/session')
+        if (!ignore && JSON.stringify(next) !== JSON.stringify(session)) {
+          receiveSession(next)
+          setPage('ask')
+        }
+      } catch { /* An in-flight request or next focus can recover a short interruption. */ }
+    }
+    window.addEventListener('focus', refresh)
+    const timer = setInterval(refresh, 30000)
+    return () => { ignore = true; window.removeEventListener('focus', refresh); clearInterval(timer) }
+  }, [session])
+
+  async function stop() {
+    if (!current || !isActive(current.status)) return
+    try {
+      const stopped = await api<Run>('/runs/' + current.id + '/cancel', {})
+      setRun(existing => existing?.id === stopped.id ? stopped : existing)
+      setHistory(await api<RunSummary[]>('/runs'))
+    } catch (err) { setError(errorText(err)) }
+  }
+
+  async function logout() {
+    try {
+      await api('/auth/logout', {})
+      receiveSession(await api<Session>('/session'))
+      setPage('ask')
+    } catch (err) { setError(errorText(err)) }
+  }
+
   function showCitation(citation: Citation) {
     setDocument({ id: citation.document_id, citation })
   }
@@ -134,7 +186,14 @@ export function App() {
       {error && <button className="button" onClick={() => location.reload()}>重试</button>}
     </main>
   }
-  if (session.role === null) return <LoginPage onLogin={login} />
+  if (session.role === null) return session.mode === 'team'
+    ? <TeamLogin onLogin={value => { receiveSession(value); setPage('ask') }} />
+    : <LoginPage onLogin={login} />
+
+  const team = session.mode === 'team'
+  const admin = Boolean(session.account?.admin)
+  const visiblePages = pages.filter(item => item.id === 'team' ? admin : item.id !== 'benchmark' || !team || admin)
+  const navigationLabel = (item: typeof pages[number]) => team && item.id === 'benchmark' ? '业务回归' : item.label
 
   return (
     <div className={'app-shell view-' + page}>
@@ -145,11 +204,11 @@ export function App() {
         </button>
 
         <nav className="primary-nav" aria-label="主导航">
-          {pages.map(({ id, label, icon: Icon }) =>
-            <button key={id} aria-current={page === id ? 'page' : undefined}
-              className={'nav-link ' + (page === id ? 'active' : '')}
-              onClick={() => { setPage(id); setError('') }}>
-              <Icon size={17} /> <span>{label}</span>
+          {visiblePages.map(item =>
+            <button key={item.id} aria-current={page === item.id ? 'page' : undefined}
+              className={'nav-link ' + (page === item.id ? 'active' : '')}
+              onClick={() => { setPage(item.id); setError('') }}>
+              <item.icon size={17} /> <span>{navigationLabel(item)}</span>
             </button>,
           )}
         </nav>
@@ -161,7 +220,8 @@ export function App() {
           <div className="project-list">
             {session.projects.map(project => (
               <label className="project-check" key={project.id}>
-                <input type="checkbox" checked={scope.includes(project.id)} onChange={() => {
+                <input type="checkbox" checked={scope.includes(project.id)}
+                  disabled={scope.length >= 12 && !scope.includes(project.id)} onChange={() => {
                   setScope(existing => existing.includes(project.id)
                     ? existing.filter(id => id !== project.id)
                     : [...existing, project.id])
@@ -172,15 +232,17 @@ export function App() {
               </label>
             ))}
           </div>
+          {!session.projects.length && <p className="history-empty">当前账号还没有项目</p>}
         </section>
 
         <section className="history-section" aria-label="最近运行">
           <div className="sidebar-heading"><span>最近运行</span><Clock3 size={13} /></div>
-          {history.length ? history.slice(0, 8).map(item => (
+          {history.length ? history.map(item => (
             <button key={item.id} title={item.question}
               className={'history-item ' + (page === 'ask' && runId === item.id ? 'active' : '')}
               onClick={() => { setError(''); setPage('ask'); setRunId(item.id) }}>
               <MessageSquareText size={14} /><span>{item.question}</span>
+              {isActive(item.status) && <i className="queue-dot" />}
             </button>
           )) : <p className="history-empty">完成一次提问后显示</p>}
         </section>
@@ -189,8 +251,8 @@ export function App() {
           <details className="account-switch">
             <summary>
               <span className="account-avatar"><Shield size={17} /></span>
-              <span className="account-label"><strong>{roles[session.role]}</strong>
-                <small>{session.demo ? '合成演示工作区' : '角色账号'}</small></span>
+              <span className="account-label"><strong>{session.account?.name ?? roles[session.role]}</strong>
+                <small>{team ? admin ? '团队管理员' : '团队成员' : session.demo ? '合成演示工作区' : '角色账号'}</small></span>
               <ChevronDown size={14} />
             </summary>
             <div className="account-menu">
@@ -199,7 +261,7 @@ export function App() {
                   event.currentTarget.closest('details')?.removeAttribute('open')
                   login(role).catch(err => setError(errorText(err)))
                 }}>切换为{roles[role]}</button>
-              )) : <span>角色会话有效期为 12 小时</span>}
+              )) : <button onClick={logout}>退出账号</button>}
             </div>
           </details>
         </div>
@@ -207,7 +269,7 @@ export function App() {
 
       <header className="topbar">
         <div className="breadcrumbs"><span>团队知识</span><ChevronRight size={13} />
-          <strong>{pages.find(item => item.id === page)?.label}</strong></div>
+          <strong>{navigationLabel(pages.find(item => item.id === page) ?? pages[0])}</strong></div>
         <div className="top-actions">
           <span className="mode-indicator" title={session.model ?? undefined}><i />{session.model ? '模型已配置' : '本地摘录'}</span>
           <a className="icon-button api-link" href="/docs" target="_blank" rel="noreferrer" title="API 文档" aria-label="API 文档"><CircleHelp size={18} /></a>
@@ -217,9 +279,11 @@ export function App() {
       <main className="main-content">
         {error && <div className="notice error" role="alert">{error}</div>}
         {page === 'ask' && <Workbench run={current} busy={busy} draft={draft} setDraft={setDraft}
-          scope={scope} projects={session.projects} ask={ask} showCitation={showCitation} />}
-        {page === 'library' && <Library projects={session.projects} canPublish={session.role === 'reviewer'} open={setDocument} />}
-        {page === 'benchmark' && <Benchmark />}
+          scope={scope} projects={session.projects} ask={ask} showCitation={showCitation}
+          team={team} stop={stop} setup={admin ? () => setPage('team') : undefined} />}
+        {page === 'library' && <Library projects={session.projects} open={setDocument} />}
+        {page === 'benchmark' && (team ? admin && <WorkspaceQuality projects={session.projects} /> : <Benchmark />)}
+        {page === 'team' && admin && <TeamWorkspace onProjectChanged={syncProjects} />}
       </main>
       {page === 'ask' && <EvidencePanel key={runId ?? 'initial'} run={current} showCitation={showCitation} />}
       {document && <DocumentDialog target={document} close={() => setDocument(null)} />}

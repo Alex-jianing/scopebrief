@@ -1,32 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import type { FormEvent, ReactNode } from 'react'
-import { ArrowUpRight, BookOpen, FilePlus2, FileText, FolderOpen, LoaderCircle, Search, X } from 'lucide-react'
-import { api, errorText, formatDate } from './api'
+import type { FormEvent } from 'react'
+import { ArrowUpRight, BookOpen, FilePlus2, FileText, FolderOpen, LoaderCircle, Search } from 'lucide-react'
+import { api, errorText, formatDate, importPreview } from './api'
 import type { Citation, DocumentVersion, FullDocument, Project } from './api'
-import { Blank } from './ui'
+import { Blank, Modal } from './ui'
+import { BulkImport } from './BulkImport'
 
 export type DocumentTarget = { id: string; citation?: Citation }
-
-function Modal({ label, close, drawer, children }: {
-  label: string; close: () => void; drawer?: boolean; children: ReactNode
-}) {
-  const ref = useRef<HTMLDialogElement>(null)
-  useEffect(() => {
-    const dialog = ref.current
-    dialog?.showModal()
-    return () => dialog?.close()
-  }, [])
-  return <dialog ref={ref} aria-label={label} className={drawer ? 'dialog drawer' : 'dialog'}
-    onCancel={event => { event.preventDefault(); close() }}
-    onClick={event => { if (event.target === event.currentTarget) close() }}>
-    <div className="dialog-inner">
-      <header className="dialog-heading"><h2>{label}</h2>
-        <button className="icon-button" type="button" onClick={close} aria-label="关闭"><X size={20} /></button>
-      </header>
-      {children}
-    </div>
-  </dialog>
-}
 
 export function DocumentDialog({ target, close }: { target: DocumentTarget; close: () => void }) {
   const [doc, setDoc] = useState<FullDocument | null>(null)
@@ -50,8 +30,11 @@ export function DocumentDialog({ target, close }: { target: DocumentTarget; clos
       <div className="document-title">
         <span className="chip violet">v{doc.revision}</span>
         <span className={'chip ' + (doc.current ? 'teal' : 'neutral')}>{doc.current ? '当前版本' : '历史版本'}</span>
+        {doc.archived_at && <span className="chip amber">已归档</span>}
         <h3>{doc.title}</h3>
         <p>{formatDate(doc.published_at)}{citation && ' · ' + citation.heading}</p>
+        {doc.source_name && <p>来源文件 · {doc.source_name}</p>}
+        {doc.change_note && <p>版本说明 · {doc.change_note}</p>}
       </div>
       <div className="source-text" aria-label="带行号的 Markdown 原文">
         {doc.body.split(/\r\n|\r|\n/).map((line, i) => {
@@ -66,13 +49,19 @@ export function DocumentDialog({ target, close }: { target: DocumentTarget; clos
   </Modal>
 }
 
-export function Library({ projects, canPublish, open }: {
-  projects: Project[]; canPublish: boolean; open: (target: DocumentTarget) => void
+export function Library({ projects, open }: {
+  projects: Project[]; open: (target: DocumentTarget) => void
 }) {
   const [docs, setDocs] = useState<DocumentVersion[] | null>(null)
   const [filter, setFilter] = useState('')
   const [projectId, setProjectId] = useState('')
   const [includeHistory, setIncludeHistory] = useState(false)
+  const [includeArchived, setIncludeArchived] = useState(false)
+  const [bulk, setBulk] = useState(false)
+  const [pageSize, setPageSize] = useState(35)
+  const [archiveTarget, setArchiveTarget] = useState<DocumentVersion | null>(null)
+  const [archiving, setArchiving] = useState(false)
+  const [actionError, setActionError] = useState('')
   const [publish, setPublish] = useState<DocumentVersion | 'new' | null>(null)
   const [published, setPublished] = useState('')
   const [error, setError] = useState('')
@@ -85,15 +74,33 @@ export function Library({ projects, canPublish, open }: {
     return () => { ignore = true }
   }, [attempt])
   const query = filter.trim().toLowerCase()
+  const writable = projects.filter(project => project.can_edit)
+  const editable = new Set(writable.map(p => p.id))
   const visible = (docs ?? []).filter(doc =>
-    (includeHistory || doc.current) && (!projectId || doc.project_id === projectId) &&
-    (!query || (doc.title + ' ' + doc.key).toLowerCase().includes(query)),
+    (includeHistory || doc.current) && (includeArchived || !doc.archived_at) &&
+    (!projectId || doc.project_id === projectId) &&
+    (!query || (doc.title + ' ' + doc.key + ' ' + doc.source_name).toLowerCase().includes(query)),
   )
+  async function archive() {
+    if (!archiveTarget || archiving) return
+    setArchiving(true)
+    setActionError('')
+    try {
+      await api('/documents/' + archiveTarget.project_id + '/' + archiveTarget.key + '/archive',
+        { archived: !archiveTarget.archived_at })
+      setPublished((archiveTarget.archived_at ? '已恢复 ' : '已归档 ') + archiveTarget.title)
+      setArchiveTarget(null)
+      setAttempt(value => value + 1)
+    } catch (err) { setActionError(errorText(err)) } finally { setArchiving(false) }
+  }
   return <div className="wide-content">
     <div className="page-heading">
       <div><div className="run-label"><BookOpen size={16} /> 知识库</div><h1>项目资料</h1>
         <p>查看原文及历史版本。发布新版本后，下次问答会检索更新后的资料。</p></div>
-      {canPublish && <button className="button primary" onClick={() => setPublish('new')}><FilePlus2 size={17} /> 发布资料</button>}
+      {!!writable.length && <div className="page-actions">
+        <button className="button" onClick={() => setBulk(true)}>批量导入</button>
+        <button className="button primary" onClick={() => setPublish('new')}><FilePlus2 size={17} /> 发布资料</button>
+      </div>}
     </div>
     {published && <div className="notice success" role="status">{published}</div>}
     <div className="surface library-card">
@@ -106,6 +113,8 @@ export function Library({ projects, canPublish, open }: {
         </select>
         <label className="checkbox-label"><input type="checkbox" checked={includeHistory}
           onChange={event => setIncludeHistory(event.target.checked)} /> 包含历史版本</label>
+        <label className="checkbox-label"><input type="checkbox" checked={includeArchived}
+          onChange={event => setIncludeArchived(event.target.checked)} /> 显示已归档</label>
       </div>
       {error ? <div className="notice error" role="alert">{error}
         <button className="button" onClick={() => { setError(''); setAttempt(attempt + 1) }}>重试</button></div>
@@ -113,20 +122,43 @@ export function Library({ projects, canPublish, open }: {
         : !visible.length ? <Blank icon={<FolderOpen size={24} />} title="没有匹配的资料" detail="试试其他关键词，或查看全部项目。" />
         : <div className="table-scroll"><table>
           <thead><tr><th>资料</th><th>项目</th><th>版本</th><th>发布时间</th><th>操作</th></tr></thead>
-          <tbody>{visible.map(doc => <tr key={doc.id}>
-            <td><button className="file-link" onClick={() => open({ id: doc.id })}><FileText size={16} /> {doc.title}</button></td>
+          <tbody>{visible.slice(0, pageSize).map(doc => <tr key={doc.id}>
+            <td><button className="file-link" onClick={() => open({ id: doc.id })}><FileText size={16} /> {doc.title}</button>
+              {doc.source_name && <small className="source-filename" title={doc.source_name}>{doc.source_name}</small>}</td>
             <td>{projects.find(project => project.id === doc.project_id)?.name}</td>
-            <td><span className={'chip ' + (doc.current ? 'teal' : 'neutral')}>v{doc.revision} · {doc.current ? '当前' : '历史'}</span></td>
+            <td><span className={'chip ' + (doc.archived_at ? 'amber' : doc.current ? 'teal' : 'neutral')}>
+              v{doc.revision} · {doc.archived_at ? '归档' : doc.current ? '当前' : '历史'}</span></td>
             <td className="muted">{formatDate(doc.published_at)}</td>
             <td><div className="row-actions">
               <button className="icon-button" title="查看原文" aria-label={'查看 ' + doc.title + ' v' + doc.revision}
                 onClick={() => open({ id: doc.id })}><ArrowUpRight size={15} /></button>
-              {canPublish && doc.current && <button className="text-button" onClick={() => setPublish(doc)}>新版本</button>}
+              {editable.has(doc.project_id) && doc.current && <>
+                {!doc.archived_at && <button className="text-button" onClick={() => setPublish(doc)}>新版本</button>}
+                <button className="text-button" onClick={() => { setArchiveTarget(doc); setActionError('') }}>
+                  {doc.archived_at ? '恢复' : '归档'}
+                </button>
+              </>}
             </div></td>
           </tr>)}</tbody>
         </table></div>}
     </div>
-    {publish && <PublishDialog projects={projects} seed={publish === 'new' ? null : publish} close={() => setPublish(null)}
+    {visible.length > pageSize && <div className="pagination">
+      <button className="button" onClick={() => setPageSize(count => count + 35)}>加载更多 · {visible.length - pageSize} 条</button>
+    </div>}
+    {archiveTarget && <Modal label={archiveTarget.archived_at ? '恢复资料' : '归档资料'}
+      close={() => { if (!archiving) setArchiveTarget(null) }}>
+      <div className="publish-form">
+        <p>{archiveTarget.title}</p>
+        <p className="muted form-hint">{archiveTarget.archived_at
+          ? '恢复后，最新版本会重新进入检索范围。'
+          : '归档后，这份资料会移出新问答的检索范围。已有引用仍可查看原文。'}</p>
+        {actionError && <p className="notice error" role="alert">{actionError}</p>}
+        <footer><button className="button" onClick={() => setArchiveTarget(null)} disabled={archiving}>取消</button>
+          <button className="button primary" onClick={archive} disabled={archiving}>
+            {archiveTarget.archived_at ? '确认恢复' : '确认归档'}</button></footer>
+      </div>
+    </Modal>}
+    {publish && <PublishDialog projects={writable} seed={publish === 'new' ? null : publish} close={() => setPublish(null)}
       onPublish={doc => {
         setDocs(rows => [doc, ...(rows ?? []).map(item => item.key === doc.key && item.project_id === doc.project_id
           ? { ...item, current: false } : item)])
@@ -134,6 +166,10 @@ export function Library({ projects, canPublish, open }: {
         setPublished('已发布 ' + doc.title + ' · v' + doc.revision)
         setPublish(null)
       }} />}
+    {bulk && <BulkImport projects={writable} close={() => setBulk(false)} onPublish={count => {
+      setPublished('已批量发布 ' + count + ' 份资料')
+      setAttempt(value => value + 1)
+    }} />}
   </div>
 }
 
@@ -145,9 +181,12 @@ function PublishDialog({ projects, seed, close, onPublish }: {
   const [key, setKey] = useState(seed?.key ?? '')
   const [title, setTitle] = useState(seed?.title ?? '')
   const [body, setBody] = useState('')
+  const [source, setSource] = useState(seed?.source_name ?? '')
+  const [changeNote, setChangeNote] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(Boolean(seed))
   const [pending, setPending] = useState(false)
+  const [importing, setImporting] = useState(false)
   useEffect(() => {
     if (!seed) return
     let ignore = false
@@ -162,32 +201,42 @@ function PublishDialog({ projects, seed, close, onPublish }: {
     setError('')
     setPending(true)
     try {
-      onPublish(await api<FullDocument>('/documents', { project_id: projectId, key, title, body }))
+      onPublish(await api<FullDocument>('/documents', {
+        project_id: projectId, key, title, body, source_name: source, change_note: changeNote,
+        expected_revision: seed?.revision,
+      }))
     } catch (err) { setError(errorText(err)) } finally { setPending(false) }
   }
   return <Modal label={seed ? '发布新版本' : '发布 Markdown 资料'} close={() => { if (!pending) close() }}>
     <form className="publish-form" onSubmit={submit}>
       <div className="publish-fields">
-        <label>项目<select disabled={Boolean(seed)} value={projectId} onChange={event => setProjectId(event.target.value)}>
+        <label>项目<select disabled={Boolean(seed) || importing} value={projectId} onChange={event => setProjectId(event.target.value)}>
           {projects.map(p => <option value={p.id} key={p.id}>{p.name}</option>)}
         </select></label>
         <label>文档键<input readOnly={Boolean(seed)} placeholder="release-notes" value={key}
           pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxLength={40} required onChange={event => setKey(event.target.value)} /></label>
       </div>
       <label>标题<input value={title} maxLength={100} required onChange={event => setTitle(event.target.value)} /></label>
-      <label className="import-label">从文件载入 <input type="file" accept=".md,.txt,text/markdown,text/plain" disabled={loading}
+      <label className="import-label">导入文件 <input type="file" accept=".md,.markdown,.txt,.pdf,.docx" disabled={loading || importing || pending}
         onChange={async event => {
           const file = event.target.files?.[0]
           if (!file) return
-          if (file.size > 64000) { setError('请选择 16,000 字以内的 Markdown 文档。'); return }
+          if (file.size > 8 * 1024 * 1024) { setError('单个文件上限为 8 MiB。'); return }
+          setImporting(true)
+          setError('')
           try {
-            const content = await file.text()
-            if (content.length > 16000) { setError('正文最多 16,000 字。'); return }
-            setBody(content)
-            setError('')
-          } catch (err) { setError(errorText(err)) }
+            const content = await importPreview(projectId, file)
+            setBody(content.body)
+            setSource(content.source_name)
+            if (!title.trim()) setTitle(content.title)
+            const slug = content.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40).replace(/-$/, '')
+            if (!key && slug) setKey(slug)
+          } catch (err) { setError(errorText(err)) } finally { setImporting(false) }
         }} /></label>
-      <label>Markdown 正文<textarea rows={9} disabled={loading} required maxLength={16000}
+      {importing ? <p className="form-hint" role="status">正在提取正文…</p>
+        : <p className="muted form-hint">{source ? '来源文件 · ' + source : '支持 Markdown、TXT、PDF、DOCX。单文件 8 MiB 以内。'}</p>}
+      <label>版本说明<input value={changeNote} maxLength={240} onChange={event => setChangeNote(event.target.value)} /></label>
+      <label>Markdown 正文<textarea rows={9} disabled={loading || importing} required maxLength={180000}
         value={body} onChange={event => setBody(event.target.value)} placeholder={'## 放行结论 [decision=go]\n请填写评审记录。'} /></label>
       <details className="markdown-help"><summary>章节标签</summary>
         <p><code>[decision=go]</code> 放行，<code>[decision=hold]</code> 暂缓。其他可用标签为
@@ -196,7 +245,7 @@ function PublishDialog({ projects, seed, close, onPublish }: {
       </details>
       {error && <div className="notice error" role="alert">{error}</div>}
       <footer><button type="button" className="button" onClick={close} disabled={pending}>取消</button>
-        <button type="submit" className="button primary" disabled={pending || loading}>{pending ? '正在发布…' : '确认发布'}</button></footer>
+        <button type="submit" className="button primary" disabled={pending || loading || importing}>{pending ? '正在发布…' : '确认发布'}</button></footer>
     </form>
   </Modal>
 }

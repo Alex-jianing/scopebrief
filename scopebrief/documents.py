@@ -14,6 +14,7 @@ HEADING = re.compile(r"^#{1,6}\s+(.+)$")
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 TAG = re.compile(r"\s+\[([a-z]+)(?:=([a-z]+))?\]\s*$")
 CHUNK_CHARS = 480
+DOCUMENT_CHARS = 180_000
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,8 @@ class Section:
 
 def parse_markdown(body: str) -> list[Section]:
     """Preserve line offsets and optional structured metadata in headings."""
+    if len(body) > DOCUMENT_CHARS or "\x00" in body:
+        raise ValueError("正文包含无效字符或超过 180,000 字。")
     sections: list[Section] = []
     heading, topic, decision = "正文", "general", None
     lines: list[tuple[int, str]] = []
@@ -76,7 +79,18 @@ def parse_markdown(body: str) -> list[Section]:
             elif marker[1].startswith(fence):
                 fence = None
         if len(line) > CHUNK_CHARS:
-            raise ValueError(f"第 {number} 行超过 {CHUNK_CHARS} 字，请换行")
+            flush()
+            # Preserve the physical line number for every excerpt of a wrapped paragraph.
+            while line:
+                end = min(CHUNK_CHARS, len(line))
+                if end < len(line):
+                    boundary = max(line.rfind(mark, end * 3 // 4, end) for mark in " 。；，、!?;")
+                    if boundary >= 0:
+                        end = boundary + 1
+                part, line = line[:end], line[end:]
+                if part.strip():
+                    sections.append(Section(heading, topic, decision, part, number, number))
+            continue
         if size + len(line) + 1 > CHUNK_CHARS:
             flush()
         if lines or line.strip():

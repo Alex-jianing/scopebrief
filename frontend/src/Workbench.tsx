@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import {
   Activity, ArrowRight, ArrowUpRight, BookOpenCheck, CircleAlert, ClipboardCheck,
-  Code2, FileSearch, GitBranch, Layers3, LoaderCircle, ScanSearch,
+  Code2, FileSearch, GitBranch, Layers3, LoaderCircle, ScanSearch, ThumbsUp, Flag, Square,
 } from 'lucide-react'
-import { labels } from './api'
+import { api, errorText, isActive, labels } from './api'
 import type { Citation, FindingStatus, Project, Run } from './api'
 import { Blank, ProjectIcon, WorkflowIllustration } from './ui'
 
@@ -35,10 +35,13 @@ type WorkbenchProps = {
   projects: Project[]
   ask: (text: string) => void
   showCitation: (item: Citation) => void
+  team: boolean
+  stop: () => void
+  setup?: () => void
 }
 
 export function Workbench({
-  run, busy, draft, setDraft, scope, projects, ask, showCitation,
+  run, busy, draft, setDraft, scope, projects, ask, showCitation, team, stop, setup,
 }: WorkbenchProps) {
   const result = run?.result
   const selected = projects.filter(project => scope.includes(project.id))
@@ -47,15 +50,18 @@ export function Workbench({
     {!run ? <section className="hero">
       <div className="hero-copy">
         <span className="hero-label"><ScanSearch size={15} /> 知识问答</span>
-        <h1>跨项目上线评审</h1>
-        <p>查放行、阻塞和回滚。每条结论都可以<br className="hero-break" />追到文档版本与原文。</p>
+        <h1>{team ? '项目知识问答' : '跨项目上线评审'}</h1>
+        <p>{team ? '按项目查团队资料、规范和决策记录。点击引用核对原文。'
+          : <>查放行、阻塞和回滚。每条结论都可以<br className="hero-break" />追到文档版本与原文。</>}</p>
       </div>
       <WorkflowIllustration />
     </section> : <section className="run-heading">
       <div className="run-label"><BookOpenCheck size={16} /> 评审结果</div>
       <h1>{run.question}</h1>
       <div className="run-meta">
-        {run.status === 'running' && <span className="chip violet"><LoaderCircle className="spin" size={14} /> 正在查证</span>}
+        {isActive(run.status) && <span className="chip violet"><LoaderCircle className="spin" size={14} />
+          {run.status === 'queued' ? '正在排队' : '正在查证'}</span>}
+        {run.status === 'cancelled' && <span className="chip neutral">已取消</span>}
         {result && <>
           <span className={'chip ' + (result.status === 'answered' ? 'teal' : 'amber')}>
             {result.status === 'answered' ? '证据齐全' : result.status === 'partial' ? '有未覆盖项' : '无法确认'}
@@ -66,12 +72,14 @@ export function Workbench({
       </div>
     </section>}
 
-    {run?.error && <div className="notice error" role="alert">{run.error}
+    {(run?.error || run?.status === 'cancelled') && run && <div className={'notice ' + (run.error ? 'error' : 'subtle')} role="status">
+      {run.error ?? '这次问答已取消。'}
       <button className="button" disabled={!canAsk} onClick={() => ask(run.question)}>重新运行</button>
     </div>}
-    {run?.status === 'running' && <div className="surface progress-state" role="status">
+    {run && isActive(run.status) && <div className="surface progress-state" role="status">
       <LoaderCircle size={20} className="spin" />
-      {run.events.at(-1)?.detail ?? '正在建立检索范围…'}
+      <span>{run.events.at(-1)?.detail ?? (run.status === 'queued' ? '等待可用的问答执行位…' : '正在建立检索范围…')}</span>
+      <button type="button" className="button" onClick={stop}><Square size={13} /> 停止</button>
     </div>}
     {result && <div className="answer-area" aria-live="polite">
       {result.scope_limited && result.citations.length > 0 && <div className="surface abstention">
@@ -102,11 +110,17 @@ export function Workbench({
           </article>
         })}
       </div>}
+      {team && run && <FeedbackControls run={run} key={run.id} />}
     </div>}
 
+    {team && !projects.length && <div className="surface no-project">
+      <strong>{setup ? '先创建一个项目' : '等待项目授权'}</strong>
+      <p>{setup ? '创建项目后即可导入资料，并邀请成员协作。' : '管理员为你的账号分配项目后，资料与问答会显示在工作台。'}</p>
+      {setup && <button className="button primary" onClick={setup}>打开团队管理 <ArrowRight size={15} /></button>}
+    </div>}
     <form className="surface composer" onSubmit={event => { event.preventDefault(); if (canAsk) ask(draft) }}>
-      <label htmlFor="question">{run ? '继续查证' : '问一个上线问题'}</label>
-      <textarea id="question" placeholder="例如：北辰今晚能上线吗？" rows={2} value={draft}
+      <label htmlFor="question">{run ? '继续查证' : team ? '查询团队知识' : '问一个上线问题'}</label>
+      <textarea id="question" placeholder={team ? '例如 发布验收需要哪些资料？' : '例如 北辰今晚能上线吗？'} rows={2} value={draft}
         maxLength={600} onChange={event => setDraft(event.target.value)}
         onKeyDown={event => {
           if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && canAsk) {
@@ -123,7 +137,7 @@ export function Workbench({
         </button>
       </div>
     </form>
-    <section className="presets" aria-label="示例问题">
+    {!team && <section className="presets" aria-label="示例问题">
       <h2>示例问题</h2>
       <div className="preset-grid">{presets.map(({ label, question, icon: Icon }) =>
         <button className="surface preset" key={label} disabled={!canAsk} onClick={() => ask(question)}>
@@ -132,7 +146,40 @@ export function Workbench({
           <ArrowUpRight className="preset-arrow" size={16} />
         </button>,
       )}</div>
-    </section>
+    </section>}
+  </div>
+}
+
+function FeedbackControls({ run }: { run: Run }) {
+  const [value, setValue] = useState(run.feedback)
+  const [review, setReview] = useState(false)
+  const [note, setNote] = useState(run.feedback?.note ?? '')
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState('')
+  async function send(rating: 'helpful' | 'review') {
+    setError('')
+    setPending(true)
+    try {
+      const saved = await api<Run>('/runs/' + run.id + '/feedback', { rating, note: rating === 'review' ? note : '' })
+      setValue(saved.feedback)
+      setReview(false)
+    } catch (err) { setError(errorText(err)) } finally { setPending(false) }
+  }
+  return <div className="surface feedback-bar">
+    <div className="feedback-actions">
+      <span>这次回答</span>
+      <button className="button" type="button" disabled={pending} aria-pressed={value?.rating === 'helpful'}
+        onClick={() => send('helpful')}><ThumbsUp size={14} /> 有帮助</button>
+      <button className="button" type="button" disabled={pending} aria-pressed={value?.rating === 'review'}
+        onClick={() => setReview(!review)}><Flag size={14} /> 需复核</button>
+      {value && <span role="status">{value.resolved_at ? '团队已处理' : value.rating === 'review' ? '已提交给管理员' : '已记录反馈'}</span>}
+    </div>
+    {review && <form className="feedback-form" onSubmit={event => { event.preventDefault(); send('review') }}>
+      <label>复核说明<textarea maxLength={240} rows={2} value={note}
+        placeholder="描述遗漏、过期或不相关的证据" onChange={event => setNote(event.target.value)} /></label>
+      <button className="button primary" disabled={pending}>提交复核</button>
+    </form>}
+    {error && <p className="notice error" role="alert">{error}</p>}
   </div>
 }
 
@@ -140,7 +187,7 @@ export function EvidencePanel({ run, showCitation }: {
   run: Run | null; showCitation: (item: Citation) => void
 }) {
   const [choice, setChoice] = useState<'sources' | 'trace' | null>(null)
-  const tab = choice ?? (run?.status === 'running' ? 'trace' : 'sources')
+  const tab = choice ?? (isActive(run?.status) ? 'trace' : 'sources')
   const sources = run?.result?.citations ?? []
   return <aside className="evidence-panel" aria-label="证据与轨迹">
     <div className="evidence-heading"><span className="evidence-mark"><BookOpenCheck size={17} /></span>

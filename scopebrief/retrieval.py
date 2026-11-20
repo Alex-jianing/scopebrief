@@ -1,9 +1,9 @@
 import math
 import re
-import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 
+from .lexicon import tokens
 from .store import Evidence, Project
 
 TOPIC_LABELS = {
@@ -26,7 +26,6 @@ INTENTS = {
     "verification": r"(验收代号|验收步骤|如何验收|怎么验收|怎样.{0,3}验收|演练验收|验证步骤)",
     "dependency": r"(依赖|上游服务|调用哪些)",
 }
-TOKEN = re.compile(r"[\u3400-\u9fff]+|[a-z0-9]+(?:[-_.][a-z0-9]+)*")
 FILLERS = (
     "请告诉我",
     "能告诉我",
@@ -45,26 +44,6 @@ FILLERS = (
     "分别",
     "各自",
 )
-STOP = {
-    "我们",
-    "他们",
-    "是否",
-    "可以",
-    "能否",
-    "哪个",
-    "怎么",
-    "如何",
-    "相关",
-    "的资",
-    "请问",
-    "现在",
-    "关于",
-    "the",
-    "is",
-    "for",
-    "and",
-    "what",
-}
 
 
 @dataclass(frozen=True)
@@ -92,16 +71,6 @@ def explicitly_named(question: str, projects: list[Project]) -> list[Project]:
             for alias in p.aliases
         )
     ]
-
-
-def tokens(text: str) -> list[str]:
-    output: list[str] = []
-    for word in TOKEN.findall(unicodedata.normalize("NFKC", text).casefold()):
-        if word.isascii() or len(word) == 1:
-            output.append(word)
-        else:
-            output.extend(word[i : i + 2] for i in range(len(word) - 1))
-    return [t for t in output if t not in STOP]
 
 
 def question_terms(question: str, scope: list[Project]) -> set[str]:

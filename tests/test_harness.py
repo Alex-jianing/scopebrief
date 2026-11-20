@@ -38,9 +38,9 @@ def test_headings_do_not_parse_inside_code_fences():
     assert "# 一行注释" in section.content
 
 
-def test_long_line_is_rejected_and_does_not_create_empty_revision(store):
-    with pytest.raises(ValueError, match="换行"):
-        store.publish("beichen", "release", "修订", "数" * 800)
+def test_invalid_metadata_does_not_create_empty_revision(store):
+    with pytest.raises(ValueError, match="放行结论"):
+        store.publish("beichen", "release", "修订", "## 决策 [decision=maybe]\n等待。")
     assert sorted(
         d["revision"]
         for d in store.documents("member")
@@ -65,6 +65,14 @@ def test_current_decisions_conflict_and_require_human_review(store):
     assert result["status"] == "insufficient"
     assert result["findings"][0]["status"] == "conflict"
     assert {e["decision"] for e in result["citations"]} == {"go", "hold"}
+
+
+def test_long_paragraph_keeps_physical_line_reference():
+    text = "价格与优惠策略。" * 180
+    sections = parse_markdown("## 费用\n\n" + text)
+    assert len(sections) > 1
+    assert "".join(section.content for section in sections) == text
+    assert {(section.start_line, section.end_line) for section in sections} == {(3, 3)}
 
 
 @pytest.mark.parametrize(
