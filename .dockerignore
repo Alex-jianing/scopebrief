@@ -11,3 +11,6 @@ scopebrief/**/__pycache__/
 !frontend/vite.config.ts
 !frontend/src/
 !frontend/src/**
+!frontend/public/
+!frontend/public/assets/
+!frontend/public/assets/font-licenses.txt
