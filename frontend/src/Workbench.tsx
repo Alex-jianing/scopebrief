@@ -1,12 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Ref } from 'react'
 import {
-  Activity, ArrowDown, ArrowRight, ArrowUpRight, BookOpenCheck, CircleAlert, ClipboardCheck,
-  Code2, FileSearch, GitBranch, Layers3, LoaderCircle, ScanSearch, ThumbsUp, Flag, Square,
+  Activity, ArrowDown, ArrowRight, ArrowUpRight, BookOpenCheck, ChevronDown, CircleAlert, ClipboardCheck,
+  Code2, FileSearch, GitBranch, Layers3, LoaderCircle, ThumbsUp, Flag, Square,
 } from 'lucide-react'
 import { api, errorText, isActive, labels } from './api'
 import type { Citation, FindingStatus, Project, Run, RunSummary } from './api'
-import { Blank, ProjectIcon } from './ui'
+import { Blank, BrandMark, ProjectIcon } from './ui'
 
 const presets = [
   { label: '跨项目放行', question: '今晚北辰和潮汐各自能否上线？哪个还有阻塞？', icon: GitBranch },
@@ -36,6 +36,7 @@ type WorkbenchProps = {
   draft: string
   setDraft: (value: string) => void
   scope: string[]
+  setScope: (value: string[]) => void
   projects: Project[]
   ask: (text: string) => void
   showCitation: (item: Citation) => void
@@ -45,12 +46,12 @@ type WorkbenchProps = {
 }
 
 export function Workbench({
-  run, opening, busy, starting, questionInput, draft, setDraft, scope, projects, ask, showCitation, team, stop, setup,
+  run, opening, busy, starting, questionInput, draft, setDraft, scope, setScope, projects, ask, showCitation, team, stop, setup,
 }: WorkbenchProps) {
   const selection = run ?? opening
   const result = run?.result
-  const selected = projects.filter(project => scope.includes(project.id))
-  const canAsk = !busy && selected.length > 0
+  const canAsk = !busy && scope.length > 0
+  const runScope = run?.scope.map(id => projects.find(project => project.id === id)?.name ?? id).join('、')
 
   function jumpToEvidence() {
     const panel = document.getElementById('evidence-panel')
@@ -61,113 +62,170 @@ export function Workbench({
     })
   }
 
-  return <div className="view-content">
-    {!selection ? <section className="hero">
-      <div className="hero-copy">
-        <span className="hero-label"><ScanSearch size={15} /> 知识问答</span>
+  return <div className={'workbench-layout ' + (selection ? 'with-result' : 'workbench-start')}>
+    <div className="workbench-answer">
+      {!selection ? <header className="workbench-intro">
+        <BrandMark />
         <h1>{team ? '项目知识问答' : '跨项目上线评审'}</h1>
-        <p>{team ? <>按项目查团队资料、规范和决策记录。<br className="hero-break" />点击引用核对原文。</>
-          : <>查放行、阻塞和回滚。每条结论都可以<br className="hero-break" />追到文档版本与原文。</>}</p>
-      </div>
-    </section> : <section className="run-heading" key={selection.id}>
-      <div className="run-label"><BookOpenCheck size={16} /> 评审结果</div>
-      <h1>{selection.question}</h1>
-      <div className="run-meta">
-        {opening && <span className="chip accent" role="status"><LoaderCircle className="spin" size={14} /> 加载回答</span>}
-        {run && isActive(run.status) && <span className="chip accent"><LoaderCircle className="spin" size={14} />
-          {run.status === 'queued' ? '正在排队' : '正在查证'}</span>}
-        {run?.status === 'cancelled' && <span className="chip neutral">已取消</span>}
-        {result && <>
-          <span className={'chip ' + (result.status === 'answered' ? 'teal' : 'amber')}>
-            {result.status === 'answered' ? '证据齐全' : result.status === 'partial' ? '有未覆盖项' : '无法确认'}
-          </span>
-          <span>{result.generator === 'model' ? '模型摘录' : result.generator === 'fallback' ? '模型降级 · 原文摘录' : '原文摘录'}</span>
-          <span>{result.duration_ms.toLocaleString()} ms</span>
-          <button className="button mobile-evidence-link" type="button" onClick={jumpToEvidence}>
-            查看证据 <ArrowDown size={13} />
-          </button>
-        </>}
-      </div>
-    </section>}
-
-    {(run?.error || run?.status === 'cancelled') && run && <div className={'notice ' + (run.error ? 'error' : 'subtle')} role="status">
-      {run.error ?? '这次问答已取消。'}
-      <button className="button" disabled={!canAsk} onClick={() => ask(run.question)}>重新运行</button>
-    </div>}
-    {run && isActive(run.status) && <div className="surface progress-state" role="status">
-      <LoaderCircle size={20} className="spin" />
-      <span>{run.events.at(-1)?.detail ?? (run.status === 'queued' ? '等待可用的问答执行位…' : '正在建立检索范围…')}</span>
-      <button type="button" className="button" onClick={stop}><Square size={13} /> 停止</button>
-    </div>}
-    {result && <div className="answer-area" aria-live="polite" key={run?.id}>
-      {result.scope_limited && result.citations.length > 0 && <div className="surface abstention">
-        <CircleAlert size={20} /> 部分提及项目超出此会话的权限或检索范围。
-      </div>}
-      {!result.citations.length && <div className="surface abstention">
-        <CircleAlert size={22} />
-        <div><strong>当前范围内缺少有效证据</strong><p>可以切换项目范围、补充资料或调整问题后再查证。</p></div>
-      </div>}
-      {!!result.findings.length && <div className={'finding-grid ' + (result.findings.length > 1 ? 'multiple' : '')}>
-        {result.findings.map(finding => {
-          const project = projects.find(item => item.id === finding.project_id)
-          const citations = result.citations.filter(item => finding.citation_ids.includes(item.id))
-          return <article className="surface finding" key={finding.project_id}>
-            <header><div className="finding-name"><ProjectIcon name={finding.name} color={project?.color ?? 'violet'} />
-              <h2>{finding.name}</h2></div>
-              <span className={'chip decision-' + finding.status}>{statuses[finding.status]}</span>
-            </header>
-            {finding.status === 'conflict' && <p className="conflict-message">现行记录存在相反结论，请核对下方原文。</p>}
-            {citations.map(item => <div className="finding-quote" key={item.id}>
-              <div className="quote-heading">{item.heading}</div>
-              <p>{item.quote} <button className="source-number" onClick={() => showCitation(item)}
-                aria-label={'查看引用 ' + item.number}>{item.number}</button></p>
-            </div>)}
-            {!!finding.missing.length && <p className="missing-topics">
-              待补资料 · {finding.missing.map(key => labels[key] ?? key).join('、')}
-            </p>}
-          </article>
-        })}
-      </div>}
-      {team && run && <FeedbackControls run={run} key={run.id} />}
-    </div>}
-
-    {team && !projects.length && <div className="surface no-project">
-      <strong>{setup ? '先创建一个项目' : '等待项目授权'}</strong>
-      <p>{setup ? '创建项目后即可导入资料，并邀请成员协作。' : '管理员为你的账号分配项目后，资料与问答会显示在工作台。'}</p>
-      {setup && <button className="button primary" onClick={setup}>打开团队管理 <ArrowRight size={15} /></button>}
-    </div>}
-    <form className="surface composer" onSubmit={event => { event.preventDefault(); if (canAsk) ask(draft) }}>
-      <label htmlFor="question">{selection ? '继续查证' : team ? '查询团队知识' : '问一个上线问题'}</label>
-      <textarea id="question" ref={questionInput} placeholder={team ? '例如 发布验收需要哪些资料？' : '例如 北辰今晚能上线吗？'} rows={2} value={draft}
-        maxLength={600} onChange={event => setDraft(event.target.value)}
-        onKeyDown={event => {
-          if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.nativeEvent.isComposing && canAsk) {
-            event.preventDefault()
-            ask(draft)
-          }
-        }} />
-      <div className="composer-actions">
-        <span className="composer-scope"><Layers3 size={15} />
-          {selected.length ? selected.map(project => project.name).join('、') : '请选择项目范围'}
-        </span>
-        <div className="composer-submit">
-          <span className="shortcut" aria-hidden="true" title="Ctrl 或 ⌘ 加回车提交"><kbd>Ctrl</kbd><kbd>↵</kbd></span>
-          <button className="button primary" disabled={!canAsk || draft.trim().length < 2} type="submit">
-            {starting ? <>提交中 <LoaderCircle className="spin" size={17} /></> : <>查证 <ArrowRight size={17} /></>}
-          </button>
+        <p>{team ? '按项目查团队资料、规范和决策记录，打开引用核对原文。'
+          : '查放行、阻塞和回退，每条引用都能回到对应的文档版本与行号。'}</p>
+      </header> : <section className="run-heading" key={selection.id}>
+        <div className="run-label"><BookOpenCheck size={16} /> 评审结果</div>
+        <h1>{selection.question}</h1>
+        <div className="run-meta">
+          {runScope && <span className="run-scope" aria-label={'本次检索范围 ' + runScope}><Layers3 size={14} />{runScope}</span>}
+          {opening && <span className="chip accent" role="status"><LoaderCircle className="spin" size={14} /> 加载回答</span>}
+          {run && isActive(run.status) && <span className="chip accent"><LoaderCircle className="spin" size={14} />
+            {run.status === 'queued' ? '正在排队' : '正在查证'}</span>}
+          {run?.status === 'cancelled' && <span className="chip neutral">已取消</span>}
+          {result && <>
+            <span className={'chip ' + (result.status === 'answered' ? 'teal' : 'amber')}>
+              {result.status === 'answered' ? '证据齐全' : result.status === 'partial' ? '有未覆盖项' : '无法确认'}
+            </span>
+            <span>{result.generator === 'model' ? '模型摘录' : result.generator === 'fallback' ? '模型降级 · 原文摘录' : '原文摘录'}</span>
+            <span>{result.duration_ms.toLocaleString()} ms</span>
+            <button className="button mobile-evidence-link" type="button" onClick={jumpToEvidence}>
+              查看证据 <ArrowDown size={13} />
+            </button>
+          </>}
         </div>
-      </div>
-    </form>
-    {!team && <section className="presets" aria-label="示例问题">
-      <h2>示例问题</h2>
-      <div className="preset-grid">{presets.map(({ label, question, icon: Icon }) =>
-        <button className="surface preset" key={label} disabled={!canAsk} onClick={() => ask(question)}>
-          <span className="preset-icon"><Icon size={17} /></span>
-          <span className="preset-copy"><strong>{label}</strong><small>{question}</small></span>
-          <ArrowUpRight className="preset-arrow" size={16} />
-        </button>,
-      )}</div>
-    </section>}
+      </section>}
+
+      {(run?.error || run?.status === 'cancelled') && run && <div className={'notice ' + (run.error ? 'error' : 'subtle')} role="status">
+        {run.error ?? '这次问答已取消。'}
+        <button className="button" disabled={!canAsk} onClick={() => ask(run.question)}>重新运行</button>
+      </div>}
+      {run && isActive(run.status) && <div className="surface progress-state" role="status">
+        <LoaderCircle size={20} className="spin" />
+        <span>{run.events.at(-1)?.detail ?? (run.status === 'queued' ? '等待可用的问答执行位…' : '正在建立检索范围…')}</span>
+        <button type="button" className="button" onClick={stop}><Square size={13} /> 停止</button>
+      </div>}
+      {result && <div className="answer-area" aria-live="polite" key={run?.id}>
+        {result.scope_limited && result.citations.length > 0 && <div className="surface abstention">
+          <CircleAlert size={20} /> 部分提及项目超出此会话的权限或检索范围。
+        </div>}
+        {!result.citations.length && <div className="surface abstention">
+          <CircleAlert size={22} />
+          <div><strong>当前范围内缺少有效证据</strong><p>可以切换项目范围、补充资料或调整问题后再查证。</p></div>
+        </div>}
+        {!!result.findings.length && <div className={'finding-grid ' + (result.findings.length > 1 ? 'multiple' : '')}>
+          {result.findings.map(finding => {
+            const project = projects.find(item => item.id === finding.project_id)
+            const citations = result.citations.filter(item => finding.citation_ids.includes(item.id))
+            return <article className="surface finding" key={finding.project_id}>
+              <header><div className="finding-name"><ProjectIcon name={finding.name} color={project?.color ?? 'violet'} />
+                <h2>{finding.name}</h2></div>
+                <span className={'chip decision-' + finding.status}>{statuses[finding.status]}</span>
+              </header>
+              {finding.status === 'conflict' && <p className="conflict-message">现行记录存在相反结论，请核对下方原文。</p>}
+              {citations.map(item => <div className="finding-quote" key={item.id}>
+                <div className="quote-heading">{item.heading}</div>
+                <p>{item.quote} <button className="source-number" onClick={() => showCitation(item)}
+                  aria-label={'查看引用 ' + item.number}>{item.number}</button></p>
+              </div>)}
+              {!!finding.missing.length && <p className="missing-topics">
+                待补资料 · {finding.missing.map(key => labels[key] ?? key).join('、')}
+              </p>}
+            </article>
+          })}
+        </div>}
+        {team && run && <FeedbackControls run={run} key={run.id} />}
+      </div>}
+    </div>
+
+    {selection && <EvidencePanel key={selection.id} run={run} showCitation={showCitation} />}
+
+    <div className="workbench-entry">
+      {team && !projects.length && <div className="surface no-project">
+        <strong>{setup ? '先创建一个项目' : '等待项目授权'}</strong>
+        <p>{setup ? '创建项目后即可导入资料，并邀请成员协作。' : '管理员为你的账号分配项目后，资料与问答会显示在工作台。'}</p>
+        {setup && <button className="button primary" onClick={setup}>打开团队管理 <ArrowRight size={15} /></button>}
+      </div>}
+      <form className="surface composer" onSubmit={event => { event.preventDefault(); if (canAsk) ask(draft) }}>
+        <div className="composer-heading">
+          <label htmlFor="question">{selection ? '继续查证' : team ? '查询团队知识' : '问一个上线问题'}</label>
+          <kbd className="focus-key" title="按 / 聚焦提问框" aria-hidden="true">/</kbd>
+        </div>
+        <textarea id="question" ref={questionInput} placeholder={team ? '例如 发布验收需要哪些资料？' : '例如 北辰今晚能上线吗？'} rows={2} value={draft}
+          maxLength={600} onChange={event => setDraft(event.target.value)}
+          onKeyDown={event => {
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.nativeEvent.isComposing && canAsk) {
+              event.preventDefault()
+              ask(draft)
+            }
+          }} />
+        <div className="composer-actions">
+          <ScopePicker projects={projects} scope={scope} setScope={setScope} />
+          <div className="composer-submit">
+            <span className="shortcut" aria-hidden="true" title="Ctrl 或 ⌘ 加回车提交"><kbd>Ctrl</kbd><kbd>↵</kbd></span>
+            <button className="button primary" disabled={!canAsk || draft.trim().length < 2} type="submit">
+              {starting ? <>提交中 <LoaderCircle className="spin" size={17} /></> : <>查证 <ArrowRight size={17} /></>}
+            </button>
+          </div>
+        </div>
+      </form>
+      {!selection && !team && <section className="presets" aria-label="示例问题">
+        <h2>示例问题</h2>
+        <div className="preset-grid">{presets.map(({ label, question, icon: Icon }) =>
+          <button className="surface preset" key={label} disabled={!canAsk} onClick={() => ask(question)}>
+            <span className="preset-icon"><Icon size={17} /></span>
+            <span className="preset-copy"><strong>{label}</strong><small>{question}</small></span>
+            <ArrowUpRight className="preset-arrow" size={16} />
+          </button>,
+        )}</div>
+      </section>}
+    </div>
+  </div>
+}
+
+function ScopePicker({ projects, scope, setScope }: {
+  projects: Project[]; scope: string[]; setScope: (value: string[]) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const picker = useRef<HTMLDivElement>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const selected = projects.filter(project => scope.includes(project.id))
+  const caption = selected.length > 2 ? '已选 ' + selected.length + ' 个项目' :
+    selected.map(project => project.name).join('、') || '选择项目'
+  useEffect(() => {
+    if (!expanded) return
+    function dismiss(event: PointerEvent) {
+      if (event.target instanceof Node && !picker.current?.contains(event.target)) setExpanded(false)
+    }
+    document.addEventListener('pointerdown', dismiss)
+    return () => document.removeEventListener('pointerdown', dismiss)
+  }, [expanded])
+
+  return <div className="scope-picker" ref={picker}
+    onBlur={event => {
+      if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setExpanded(false)
+    }}
+    onKeyDown={event => {
+      if (event.key !== 'Escape' || !expanded) return
+      event.stopPropagation()
+      setExpanded(false)
+      trigger.current?.focus()
+    }}>
+    <button className="scope-trigger" type="button" ref={trigger} aria-expanded={expanded} aria-controls="question-scope-options"
+      aria-label="项目范围" aria-describedby="selected-projects" onClick={() => setExpanded(!expanded)}
+      title={selected.map(project => project.name).join('、') || '选择项目'}>
+      <Layers3 size={15} /><span id="selected-projects">{caption}</span><ChevronDown size={14} />
+    </button>
+    <div className="scope-menu" id="question-scope-options" hidden={!expanded}>
+      <div className="scope-menu-heading"><strong>项目范围</strong><span>{selected.length} / {projects.length}</span></div>
+      {projects.length ? <div className="scope-options">
+        {projects.map(project => {
+          const checked = scope.includes(project.id)
+          return <label className="scope-option" key={project.id}>
+            <ProjectIcon name={project.name} color={project.color} />
+            <span className="scope-option-label"><strong>{project.name}</strong><small>{project.description}</small></span>
+            <input type="checkbox" checked={checked} disabled={!checked && scope.length >= 12}
+              onChange={() => setScope(checked ? scope.filter(id => id !== project.id) : [...scope, project.id])} />
+          </label>
+        })}
+      </div> : <p className="scope-note">当前账号还没有可用项目。</p>}
+      {scope.length >= 12 && <p className="scope-note">每次最多选 12 个项目。</p>}
+    </div>
   </div>
 }
 

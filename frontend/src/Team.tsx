@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Copy, FolderPlus, History, KeyRound, LoaderCircle, Pencil, Plus, UsersRound } from 'lucide-react'
+import { Copy, FolderPlus, History, KeyRound, LoaderCircle, Pencil, Plus } from 'lucide-react'
 import { api, errorText, formatDate } from './api'
 import type { Grants, Invitation, TeamInfo, TeamMember, TeamProject } from './api'
 import { Blank, Modal, ProjectIcon } from './ui'
@@ -45,7 +45,6 @@ export function TeamWorkspace({ onProjectChanged }: { onProjectChanged: () => Pr
 
   return <div className="wide-content">
     <div className="page-heading"><div>
-      <div className="run-label"><UsersRound size={16} /> 工作区</div>
       <h1>团队管理</h1><p>管理项目、成员和资料权限。</p>
     </div><div className="page-actions">
       {tab === 'projects' && <button className="button primary" onClick={() => setProject('new')}>

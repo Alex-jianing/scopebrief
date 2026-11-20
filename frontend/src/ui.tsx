@@ -1,6 +1,17 @@
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { X } from 'lucide-react'
+import { ScanText, X } from 'lucide-react'
+
+export function BrandMark() {
+  return <span className="brand-mark" aria-hidden="true"><ScanText size={20} strokeWidth={1.8} /></span>
+}
+
+export function AuthLayout({ children }: { children: ReactNode }) {
+  return <main className="login-page">
+    <div className="login-content">{children}</div>
+    <div className="login-art" aria-hidden="true" />
+  </main>
+}
 
 export function Modal({ label, close, drawer, children }: {
   label: string; close: () => void; drawer?: boolean; children: ReactNode

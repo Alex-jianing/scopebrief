@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { ArrowUpRight, BookOpen, FilePlus2, FileText, FolderOpen, LoaderCircle, Search } from 'lucide-react'
+import { ArrowUpRight, FilePlus2, FileText, FolderOpen, LoaderCircle, Search } from 'lucide-react'
 import { api, errorText, formatDate, importPreview } from './api'
 import type { Citation, DocumentVersion, FullDocument, Project } from './api'
 import { Blank, Modal } from './ui'
@@ -95,7 +95,7 @@ export function Library({ projects, open }: {
   }
   return <div className="wide-content">
     <div className="page-heading">
-      <div><div className="run-label"><BookOpen size={16} /> 知识库</div><h1>项目资料</h1>
+      <div><h1>项目资料</h1>
         <p>查看原文及历史版本。发布新版本后，下次问答会检索更新后的资料。</p></div>
       {!!writable.length && <div className="page-actions">
         <button className="button" onClick={() => setBulk(true)}>批量导入</button>
@@ -115,6 +115,7 @@ export function Library({ projects, open }: {
           onChange={event => setIncludeHistory(event.target.checked)} /> 包含历史版本</label>
         <label className="checkbox-label"><input type="checkbox" checked={includeArchived}
           onChange={event => setIncludeArchived(event.target.checked)} /> 显示已归档</label>
+        {docs && !error && <span className="table-count" role="status">{visible.length} 条资料</span>}
       </div>
       {error ? <div className="notice error" role="alert">{error}
         <button className="button" onClick={() => { setError(''); setAttempt(attempt + 1) }}>重试</button></div>

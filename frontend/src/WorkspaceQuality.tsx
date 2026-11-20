@@ -57,7 +57,7 @@ export function WorkspaceQuality({ projects }: { projects: Project[] }) {
 
   return <div className="wide-content">
     <div className="page-heading">
-      <div><div className="run-label"><FlaskConical size={16} /> 质量运营</div><h1>业务回归</h1>
+      <div><h1>业务回归</h1>
         <p>用团队资料验证常见问题，并把错误回答转成可复跑的用例。</p></div>
       <div className="page-actions">
         <button className="button" disabled={!projects.length} onClick={() => setEditor({})}><Plus size={16} /> 新建用例</button>

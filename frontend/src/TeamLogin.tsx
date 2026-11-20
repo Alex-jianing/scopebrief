@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { KeyRound, Waypoints } from 'lucide-react'
+import { KeyRound } from 'lucide-react'
 import { api, errorText } from './api'
 import type { Session } from './api'
+import { AuthLayout, BrandMark } from './ui'
 
 export function TeamLogin({ onLogin }: { onLogin: (value: Session) => void }) {
   const [invite, setInvite] = useState(() => new URLSearchParams(location.hash.slice(1)).get('invite') ?? '')
@@ -27,10 +28,10 @@ export function TeamLogin({ onLogin }: { onLogin: (value: Session) => void }) {
     } catch (err) { setError(errorText(err)) } finally { setPending(false) }
   }
 
-  return <main className="loading login-page">
-    <form className="surface login-form team-login" onSubmit={submit} key={String(activate)}>
-      <span className="brand-mark"><Waypoints size={21} /></span>
-      <h1>{activate ? '激活团队账号' : '登录 ScopeBrief'}</h1>
+  return <AuthLayout>
+    <form className="login-form" onSubmit={submit} key={String(activate)}>
+      <BrandMark />
+      <h1>{activate ? '激活团队账号' : '登录问据'}</h1>
       {activate && <>
         <label>邀请码<input autoComplete="one-time-code" maxLength={80} required
           value={invite} onChange={event => setInvite(event.target.value)} /></label>
@@ -48,5 +49,5 @@ export function TeamLogin({ onLogin }: { onLogin: (value: Session) => void }) {
         <KeyRound size={14} /> {activate ? '返回账号登录' : '我有邀请码'}
       </button>
     </form>
-  </main>
+  </AuthLayout>
 }

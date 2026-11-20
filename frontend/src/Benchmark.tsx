@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  ChartNoAxesCombined, Check, Download, FlaskConical, LoaderCircle, Play, X,
+  ChartNoAxesCombined, Check, Download, LoaderCircle, Play, X,
 } from 'lucide-react'
 import { api, errorText } from './api'
 import type { Metrics, Report } from './api'
@@ -40,7 +40,7 @@ export function Benchmark() {
 
   return <div className="wide-content">
     <div className="page-heading">
-      <div><div className="run-label"><FlaskConical size={16} /> 质量验证</div><h1>回归评测</h1>
+      <div><h1>回归评测</h1>
         <p>在独立的合成语料上复跑 BM25 基线与 Harness，逐题核对结果。</p></div>
       <div className="page-actions">
         {report && <button className="button" onClick={download}><Download size={16} /> 导出 JSON</button>}

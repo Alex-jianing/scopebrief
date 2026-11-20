@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
-  BookOpen, ChartNoAxesCombined, Check, ChevronDown, ChevronRight,
+  BookOpen, ChartNoAxesCombined, ChevronDown, ChevronRight,
   CircleHelp, Clock3, MessageSquareText, PanelsTopLeft, Plus,
-  Shield, UsersRound, Waypoints,
+  Shield, UsersRound,
 } from 'lucide-react'
 import { api, errorText, formatDate, isActive } from './api'
 import type { Citation, Role, Run, RunSummary, Session } from './api'
 import { Benchmark } from './Benchmark'
 import { DocumentDialog, Library } from './Library'
 import type { DocumentTarget } from './Library'
-import { ProjectIcon } from './ui'
-import { EvidencePanel, Workbench } from './Workbench'
+import { AuthLayout, BrandMark } from './ui'
+import { Workbench } from './Workbench'
 import { TeamWorkspace } from './Team'
 import { WorkspaceQuality } from './WorkspaceQuality'
 import { TeamLogin } from './TeamLogin'
@@ -35,7 +35,7 @@ export function App() {
   const [error, setError] = useState('')
   const [starting, setStarting] = useState(false)
   const [draft, setDraft] = useState('')
-  const [document, setDocument] = useState<DocumentTarget | null>(null)
+  const [documentTarget, setDocument] = useState<DocumentTarget | null>(null)
   const questionInput = useRef<HTMLTextAreaElement>(null)
 
   function receiveSession(value: Session) {
@@ -62,6 +62,22 @@ export function App() {
     }).catch(err => { if (!cancelled) setError(errorText(err)) })
     return () => { cancelled = true }
   }, [session])
+
+  useEffect(() => {
+    if (!session?.role) return
+    function focusComposer(event: KeyboardEvent) {
+      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey || event.isComposing ||
+        event.defaultPrevented || document.querySelector('dialog[open], .scope-trigger[aria-expanded="true"]')) return
+      if (event.target instanceof Element &&
+        event.target.closest('input, textarea, select, [contenteditable], details[open]')) return
+      event.preventDefault()
+      setPage('ask')
+      setError('')
+      requestAnimationFrame(() => questionInput.current?.focus())
+    }
+    window.addEventListener('keydown', focusComposer)
+    return () => window.removeEventListener('keydown', focusComposer)
+  }, [session?.role])
 
   useEffect(() => {
     if (!runId || !session?.role) return
@@ -138,6 +154,7 @@ export function App() {
       setRun({ id: response.id, question: text, status: 'queued', scope,
         created_at: new Date().toISOString(), result: null, error: null, feedback: null, events: [] })
       setDraft('')
+      window.scrollTo({ top: 0, behavior: 'instant' })
     } catch (err) {
       setError(errorText(err))
     } finally {
@@ -204,7 +221,7 @@ export function App() {
   }
 
   if (!session) {
-    return <main className="loading"><Waypoints size={34} /><p>{error || '正在打开工作台…'}</p>
+    return <main className="loading"><BrandMark /><p>{error || '正在打开问据…'}</p>
       {error && <button className="button" onClick={() => location.reload()}>重试</button>}
     </main>
   }
@@ -216,14 +233,19 @@ export function App() {
   const admin = Boolean(session.account?.admin)
   const visiblePages = pages.filter(item => item.id === 'team' ? admin : item.id !== 'benchmark' || !team || admin)
   const navigationLabel = (item: typeof pages[number]) => team && item.id === 'benchmark' ? '业务回归' : item.label
+  const newQuestion = <button className="button new-question" type="button" disabled={busy} onClick={startQuestion}>
+    <Plus size={17} /> 新建问答
+  </button>
 
   return (
     <div className={'app-shell view-' + page}>
       <aside className="sidebar" aria-label="工作区">
-        <button className="brand" onClick={() => navigate('ask')}>
-          <span className="brand-mark"><Waypoints size={21} strokeWidth={2.3} /></span>
-          <span><strong>ScopeBrief</strong><small>项目证据台</small></span>
+        <button className="brand" type="button" onClick={() => navigate('ask')}>
+          <BrandMark />
+          <span><strong>问据</strong><small>团队知识工作台</small></span>
         </button>
+
+        <div className="sidebar-action">{newQuestion}</div>
 
         <nav className="primary-nav" aria-label="主导航">
           {visiblePages.map(item =>
@@ -235,41 +257,21 @@ export function App() {
           )}
         </nav>
 
-        <section className="workspace-projects" aria-label="项目范围">
-          <div className="sidebar-heading">
-            <span>项目范围</span><small>{scope.length}/{session.projects.length}</small>
+        <section className={'history-section' + (history.length ? '' : ' is-empty')} aria-label="最近运行">
+          <div className="sidebar-heading"><Clock3 size={14} /><span>最近问答</span></div>
+          <div className="history-list">
+            {history.length ? history.map(item => {
+              const active = page === 'ask' && runId === item.id
+              const timestamp = formatDate(item.created_at)
+              return <button key={item.id} title={item.question + ' · ' + timestamp}
+                aria-current={active ? 'true' : undefined} className={'history-item' + (active ? ' active' : '')}
+                onClick={() => navigate('ask', item.id)}>
+                <MessageSquareText size={15} />
+                <span className="history-copy"><span>{item.question}</span><time dateTime={item.created_at}>{timestamp}</time></span>
+                {isActive(item.status) && <i className="queue-dot" />}
+              </button>
+            }) : <p className="history-empty">还没有问答记录</p>}
           </div>
-          <div className="project-list">
-            {session.projects.map(project => (
-              <label className="project-check" key={project.id}>
-                <input type="checkbox" checked={scope.includes(project.id)}
-                  disabled={scope.length >= 12 && !scope.includes(project.id)} onChange={() => {
-                  setScope(existing => existing.includes(project.id)
-                    ? existing.filter(id => id !== project.id)
-                    : [...existing, project.id])
-                }} />
-                <ProjectIcon name={project.name} color={project.color} />
-                <span className="project-label"><strong>{project.name}</strong><small>{project.description}</small></span>
-                <span className="checkmark" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
-              </label>
-            ))}
-          </div>
-          {!session.projects.length && <p className="history-empty">当前账号还没有项目</p>}
-        </section>
-
-        <section className="history-section" aria-label="最近运行">
-          <div className="sidebar-heading"><span>最近运行</span><Clock3 size={13} /></div>
-          {history.length ? history.map(item => {
-            const active = page === 'ask' && runId === item.id
-            const timestamp = formatDate(item.created_at)
-            return <button key={item.id} title={item.question + ' · ' + timestamp}
-              aria-current={active ? 'true' : undefined} className={'history-item' + (active ? ' active' : '')}
-              onClick={() => navigate('ask', item.id)}>
-              <MessageSquareText size={15} />
-              <span className="history-copy"><span>{item.question}</span><time dateTime={item.created_at}>{timestamp}</time></span>
-              {isActive(item.status) && <i className="queue-dot" />}
-            </button>
-          }) : <p className="history-empty">完成一次提问后显示</p>}
         </section>
 
         <div className="account">
@@ -277,7 +279,7 @@ export function App() {
             <summary>
               <span className="account-avatar"><Shield size={17} /></span>
               <span className="account-label"><strong>{session.account?.name ?? roles[session.role]}</strong>
-                <small>{team ? admin ? '团队管理员' : '团队成员' : session.demo ? '合成演示工作区' : '角色账号'}</small></span>
+                <small>{team ? admin ? '团队管理员' : '团队成员' : session.demo ? '演示工作区' : '角色账号'}</small></span>
               <ChevronDown size={14} />
             </summary>
             <div className="account-menu">
@@ -293,14 +295,12 @@ export function App() {
       </aside>
 
       <header className="topbar">
-        <div className="breadcrumbs"><span>团队知识</span><ChevronRight size={13} />
+        <div className="breadcrumbs"><span>工作区</span><ChevronRight size={13} />
           <strong>{navigationLabel(pages.find(item => item.id === page) ?? pages[0])}</strong></div>
         <div className="top-actions">
           <span className="mode-indicator" title={session.model ?? undefined}><i />{session.model ? '模型已配置' : '本地摘录'}</span>
           <a className="icon-button api-link" href="/docs" target="_blank" rel="noreferrer" title="API 文档" aria-label="API 文档"><CircleHelp size={18} /></a>
-          <button className="button new-question" type="button" disabled={busy} onClick={startQuestion}>
-            <Plus size={16} /> 新建问答
-          </button>
+          <div className="topbar-action">{newQuestion}</div>
         </div>
       </header>
 
@@ -308,15 +308,14 @@ export function App() {
         {error && <div className="notice error" role="alert">{error}</div>}
         <div className="view-stage" key={page}>
           {page === 'ask' && <Workbench run={current} opening={opening} busy={busy} starting={starting} questionInput={questionInput}
-            draft={draft} setDraft={setDraft} scope={scope} projects={session.projects} ask={ask}
+            draft={draft} setDraft={setDraft} scope={scope} setScope={setScope} projects={session.projects} ask={ask}
             showCitation={showCitation} team={team} stop={stop} setup={admin ? () => navigate('team') : undefined} />}
           {page === 'library' && <Library projects={session.projects} open={setDocument} />}
           {page === 'benchmark' && (team ? admin && <WorkspaceQuality projects={session.projects} /> : <Benchmark />)}
           {page === 'team' && admin && <TeamWorkspace onProjectChanged={syncProjects} />}
         </div>
       </main>
-      {page === 'ask' && <EvidencePanel key={runId ?? 'initial'} run={current} showCitation={showCitation} />}
-      {document && <DocumentDialog target={document} close={() => setDocument(null)} />}
+      {documentTarget && <DocumentDialog target={documentTarget} close={() => setDocument(null)} />}
     </div>
   )
 }
@@ -332,9 +331,9 @@ function LoginPage({ onLogin }: { onLogin: (role: Role, key: string) => Promise<
     setPending(true)
     try { await onLogin(role, key) } catch (err) { setError(errorText(err)) } finally { setPending(false) }
   }
-  return <main className="loading login-page">
-    <form className="surface login-form" onSubmit={submit}>
-      <span className="brand-mark"><Waypoints size={21} /></span><h1>登录 ScopeBrief</h1>
+  return <AuthLayout>
+    <form className="login-form" onSubmit={submit}>
+      <BrandMark /><h1>登录问据</h1>
       <label>角色<select value={role} onChange={event => setRole(event.target.value as Role)}>
         <option value="member">项目成员</option><option value="reviewer">评审者</option>
       </select></label>
@@ -343,5 +342,5 @@ function LoginPage({ onLogin }: { onLogin: (role: Role, key: string) => Promise<
       {error && <div className="notice error" role="alert">{error}</div>}
       <button className="button primary" disabled={pending}>登录</button>
     </form>
-  </main>
+  </AuthLayout>
 }
